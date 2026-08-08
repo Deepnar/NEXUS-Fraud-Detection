@@ -138,11 +138,12 @@ model ExtractedUrl {
   conversationId String
   rawUrl         String       @db.VarChar(2048)
   normalizedUrl  String       @db.VarChar(2048)
+  normalizedHash String       @db.Char(64)
   host           String?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  @@unique([conversationId, normalizedUrl])
+  @@unique([conversationId, normalizedHash])
   @@index([host])
 }
 

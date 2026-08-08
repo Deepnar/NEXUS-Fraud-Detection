@@ -47,9 +47,9 @@ export async function POST(request: Request, { params }: Params) {
       for (const extractedUrl of extractedUrls) {
         await tx.extractedUrl.upsert({
           where: {
-            conversationId_normalizedUrl: {
+            conversationId_normalizedHash: {
               conversationId: id,
-              normalizedUrl: extractedUrl.normalizedUrl,
+              normalizedHash: extractedUrl.normalizedHash,
             },
           },
           create: {

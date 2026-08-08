@@ -2,9 +2,15 @@ import nodemailer from "nodemailer";
 import { env } from "@/lib/env";
 
 function requireSmtpConfig() {
-  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS || !env.SMTP_FROM) {
+  const hasMissingValue = !env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS || !env.SMTP_FROM;
+  const hasPlaceholderValue =
+    env.SMTP_USER === "your-email@example.com" ||
+    env.SMTP_PASS === "your-smtp-app-password" ||
+    env.SMTP_FROM?.includes("your-email@example.com");
+
+  if (hasMissingValue || hasPlaceholderValue) {
     throw new Error(
-      "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM in .env.",
+      "SMTP is not configured. Replace SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM in .env with real email credentials.",
     );
   }
 }

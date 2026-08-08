@@ -2,7 +2,12 @@ import { ConversationSource, MessageSender } from "@prisma/client";
 import { z } from "zod";
 import { jsonError, jsonOk, parseJsonError } from "@/lib/api";
 import { getSession } from "@/lib/auth";
-import { databaseUnavailableMessage, isDatabaseUnavailable } from "@/lib/db-errors";
+import {
+  databaseSchemaMissingMessage,
+  databaseUnavailableMessage,
+  isDatabaseSchemaMissing,
+  isDatabaseUnavailable,
+} from "@/lib/db-errors";
 import { prisma } from "@/lib/prisma";
 import { extractUrls, titleFromMessage } from "@/lib/url-extraction";
 
@@ -45,6 +50,10 @@ export async function GET() {
   } catch (error) {
     if (isDatabaseUnavailable(error)) {
       return jsonError(databaseUnavailableMessage(), 503);
+    }
+
+    if (isDatabaseSchemaMissing(error)) {
+      return jsonError(databaseSchemaMissingMessage(), 503);
     }
 
     return jsonError("Could not load conversations", 500);
@@ -99,6 +108,10 @@ export async function POST(request: Request) {
   } catch (error) {
     if (isDatabaseUnavailable(error)) {
       return jsonError(databaseUnavailableMessage(), 503);
+    }
+
+    if (isDatabaseSchemaMissing(error)) {
+      return jsonError(databaseSchemaMissingMessage(), 503);
     }
 
     return jsonError(parseJsonError(error), 400);

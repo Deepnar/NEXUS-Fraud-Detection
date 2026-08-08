@@ -4,7 +4,12 @@ import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { createOtp, hashOtp, otpExpiryDate } from "@/lib/otp";
 import { sendRegistrationOtpEmail } from "@/lib/mailer";
-import { databaseUnavailableMessage, isDatabaseUnavailable } from "@/lib/db-errors";
+import {
+  databaseSchemaMissingMessage,
+  databaseUnavailableMessage,
+  isDatabaseSchemaMissing,
+  isDatabaseUnavailable,
+} from "@/lib/db-errors";
 
 const registerSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(120),
@@ -58,6 +63,10 @@ export async function POST(request: Request) {
   } catch (error) {
     if (isDatabaseUnavailable(error)) {
       return jsonError(databaseUnavailableMessage(), 503);
+    }
+
+    if (isDatabaseSchemaMissing(error)) {
+      return jsonError(databaseSchemaMissingMessage(), 503);
     }
 
     if (error instanceof Error && error.message.startsWith("SMTP is not configured")) {

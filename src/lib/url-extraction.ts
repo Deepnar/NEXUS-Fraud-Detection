@@ -1,8 +1,11 @@
+import crypto from "crypto";
+
 const URL_CANDIDATE_REGEX = /\bhttps?:\/\/[^\s<>"')\]]+/gi;
 
 export type ExtractedUrlInput = {
   rawUrl: string;
   normalizedUrl: string;
+  normalizedHash: string;
   host: string | null;
 };
 
@@ -27,6 +30,7 @@ export function extractUrls(input: string): ExtractedUrlInput[] {
       urls.push({
         rawUrl,
         normalizedUrl,
+        normalizedHash: hashUrl(normalizedUrl),
         host: parsed.hostname.toLowerCase(),
       });
     } catch {
@@ -35,6 +39,10 @@ export function extractUrls(input: string): ExtractedUrlInput[] {
   }
 
   return urls;
+}
+
+function hashUrl(normalizedUrl: string) {
+  return crypto.createHash("sha256").update(normalizedUrl).digest("hex");
 }
 
 export function titleFromMessage(message: string) {

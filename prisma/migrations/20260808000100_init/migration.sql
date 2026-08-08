@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE `User` (
     `id` VARCHAR(191) NOT NULL,
     `name` VARCHAR(191) NOT NULL,
@@ -86,11 +86,12 @@ CREATE TABLE `ExtractedUrl` (
     `conversationId` VARCHAR(191) NOT NULL,
     `rawUrl` VARCHAR(2048) NOT NULL,
     `normalizedUrl` VARCHAR(2048) NOT NULL,
+    `normalizedHash` CHAR(64) NOT NULL,
     `host` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `ExtractedUrl_host_idx`(`host`),
-    UNIQUE INDEX `ExtractedUrl_conversationId_normalizedUrl_key`(`conversationId`, `normalizedUrl`),
+    UNIQUE INDEX `ExtractedUrl_conversationId_normalizedHash_key`(`conversationId`, `normalizedHash`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
