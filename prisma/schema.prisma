@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ConversationSource {
+  WEB
+  WHATSAPP
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+  REPORTED
+}
+
+enum MessageSender {
+  USER
+  BOT
+  SYSTEM
+  OFFICER
+}
+
+enum MessageType {
+  TEXT
+  URL
+  FILE
+}
+
+enum AnalysisStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum RiskLevel {
+  UNKNOWN
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  PENDING
+  INVESTIGATING
+  RESOLVED
+  FALSE_POSITIVE
+}
+
+enum OfficerRole {
+  OFFICER
+  ADMIN
+}
+
+model User {
+  id           String         @id @default(cuid())
+  name         String
+  email        String         @unique
+  phone        String?        @unique
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  conversations Conversation[]
+  reports      IncidentReport[]
+
+  @@index([createdAt])
+}
+
+model Officer {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         OfficerRole   @default(OFFICER)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  notes        OfficerNote[]
+}
+
+model Conversation {
+  id               String             @id @default(cuid())
+  userId           String?
+  source           ConversationSource @default(WEB)
+  externalSenderId String?
+  title            String
+  status           ConversationStatus @default(ACTIVE)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  user             User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages         Message[]
+  extractedUrls    ExtractedUrl[]
+  analysisResults  AnalysisResult[]
+  incidentReports  IncidentReport[]
+
+  @@index([userId, updatedAt])
+  @@index([source, externalSenderId])
+  @@index([status, updatedAt])
+}
+
+model Message {
+  id                String        @id @default(cuid())
+  conversationId    String
+  sender            MessageSender @default(USER)
+  type              MessageType   @default(TEXT)
+  content           String        @db.Text
+  platformMessageId String?
+  metadata          Json?
+  createdAt         DateTime      @default(now())
+  conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([platformMessageId])
+}
+
+model ExtractedUrl {
+  id             String       @id @default(cuid())
+  conversationId String
+  rawUrl         String       @db.VarChar(2048)
+  normalizedUrl  String       @db.VarChar(2048)
+  host           String?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, normalizedUrl])
+  @@index([host])
+}
+
+model AnalysisResult {
+  id             String         @id @default(cuid())
+  conversationId String
+  status         AnalysisStatus @default(PENDING)
+  riskLevel      RiskLevel      @default(UNKNOWN)
+  score          Float?
+  summary        String?        @db.Text
+  evidence       Json?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([riskLevel])
+}
+
+model IncidentReport {
+  id             String         @id @default(cuid())
+  conversationId String
+  userId         String?
+  reason         String         @db.Text
+  status         IncidentStatus @default(PENDING)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  notes          OfficerNote[]
+
+  @@index([conversationId])
+  @@index([status, createdAt])
+}
+
+model OfficerNote {
+  id               String         @id @default(cuid())
+  incidentReportId String
+  officerId        String
+  note             String         @db.Text
+  createdAt        DateTime       @default(now())
+  incidentReport   IncidentReport @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  officer          Officer        @relation(fields: [officerId], references: [id], onDelete: Cascade)
+
+  @@index([incidentReportId, createdAt])
+}
