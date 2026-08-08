@@ -6,4 +6,3 @@ coverage/
 dist/
 *.log
 tsconfig.tsbuildinfo
-prisma/migrations/

@@ -4,10 +4,10 @@ services:
     container_name: nexus-mysql
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: nexus_fraud
-      MYSQL_USER: nexus
-      MYSQL_PASSWORD: nexus_password
-      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-nexus_fraud}
+      MYSQL_USER: ${MYSQL_USER:-nexus}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-nexus_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
     ports:
       - "3306:3306"
     volumes:

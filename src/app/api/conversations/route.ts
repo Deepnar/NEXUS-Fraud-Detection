@@ -2,6 +2,7 @@ import { ConversationSource, MessageSender } from "@prisma/client";
 import { z } from "zod";
 import { jsonError, jsonOk, parseJsonError } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { databaseUnavailableMessage, isDatabaseUnavailable } from "@/lib/db-errors";
 import { prisma } from "@/lib/prisma";
 import { extractUrls, titleFromMessage } from "@/lib/url-extraction";
 
@@ -19,27 +20,35 @@ export async function GET() {
     return jsonError("Unauthorized", 401);
   }
 
-  const conversations = await prisma.conversation.findMany({
-    where: { userId: session.userId },
-    orderBy: { updatedAt: "desc" },
-    include: {
-      messages: {
-        orderBy: { createdAt: "asc" },
-        take: 1,
+  try {
+    const conversations = await prisma.conversation.findMany({
+      where: { userId: session.userId },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        messages: {
+          orderBy: { createdAt: "asc" },
+          take: 1,
+        },
+        extractedUrls: true,
+        analysisResults: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        incidentReports: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
-      extractedUrls: true,
-      analysisResults: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-      },
-      incidentReports: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-      },
-    },
-  });
+    });
 
-  return jsonOk({ conversations });
+    return jsonOk({ conversations });
+  } catch (error) {
+    if (isDatabaseUnavailable(error)) {
+      return jsonError(databaseUnavailableMessage(), 503);
+    }
+
+    return jsonError("Could not load conversations", 500);
+  }
 }
 
 export async function POST(request: Request) {
@@ -88,6 +97,10 @@ export async function POST(request: Request) {
 
     return jsonOk({ conversation }, { status: 201 });
   } catch (error) {
+    if (isDatabaseUnavailable(error)) {
+      return jsonError(databaseUnavailableMessage(), 503);
+    }
+
     return jsonError(parseJsonError(error), 400);
   }
 }

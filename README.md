@@ -6,6 +6,7 @@ This repository currently contains the Phase 1 production foundation:
 
 - User registration and login
 - HTTP-only cookie sessions
+- SMTP OTP-based registration
 - Conversation dashboard
 - New suspicious-message analysis flow
 - URL extraction and normalization
@@ -42,20 +43,33 @@ This repository currently contains the Phase 1 production foundation:
    docker compose up -d mysql
    ```
 
-4. Generate Prisma and apply migrations:
+4. Configure SMTP in `.env`.
+
+   Required for registration OTP:
+
+   ```text
+   SMTP_HOST
+   SMTP_PORT
+   SMTP_SECURE
+   SMTP_USER
+   SMTP_PASS
+   SMTP_FROM
+   ```
+
+5. Generate Prisma and apply migrations:
 
    ```powershell
    npx prisma generate
    npx prisma migrate dev --name init
    ```
 
-5. Run the app:
+6. Run the app:
 
    ```powershell
    npm run dev
    ```
 
-6. Open:
+7. Open:
 
    ```text
    http://localhost:3000
@@ -64,17 +78,28 @@ This repository currently contains the Phase 1 production foundation:
 ## Phase 1 Demo Flow
 
 1. Register a user.
-2. Open **New Analysis**.
-3. Paste a suspicious message such as:
+2. Enter the OTP sent through SMTP.
+3. Open **New Analysis**.
+4. Paste a suspicious message such as:
 
    ```text
    URGENT! Your account will be blocked. Verify KYC at https://fake-bank-login.com
    ```
 
-4. The app saves the conversation.
-5. The app extracts and stores the URL.
-6. The dashboard shows the saved conversation.
-7. Open the conversation and click **Report To Officer**.
+5. The app saves the conversation.
+6. The app extracts and stores the URL.
+7. The dashboard shows the saved conversation.
+8. Open the conversation and click **Report To Officer**.
+
+## Database Runtime Fix
+
+If registration fails with `Can't reach database server at localhost:3306`, start MySQL and apply the migration:
+
+```powershell
+docker compose up -d mysql
+npx prisma migrate dev
+npm run dev
+```
 
 ## Next Phase
 

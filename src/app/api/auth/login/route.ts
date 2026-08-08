@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { jsonError, jsonOk, parseJsonError } from "@/lib/api";
 import { createSession, setSessionCookie } from "@/lib/auth";
+import { databaseUnavailableMessage, isDatabaseUnavailable } from "@/lib/db-errors";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
@@ -32,6 +33,10 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (isDatabaseUnavailable(error)) {
+      return jsonError(databaseUnavailableMessage(), 503);
+    }
+
     return jsonError(parseJsonError(error), 400);
   }
 }
