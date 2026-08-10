@@ -122,6 +122,36 @@ See `docs/n8n/README.md`. Key contract for the normalized payload:
 }
 ```
 
+## Deployment (Docker + Cloudflare tunnel)
+
+The production stack runs the app in Docker behind a Cloudflare tunnel:
+
+- **MySQL**: external `mysql-server` container (mysql:8.0) on host port 3306 —
+  holds the live data and is not managed by this compose file.
+- **Redis**: `nexus-redis` (redis:7-alpine) on host port 6381; the app's rate
+  limiters use it via `REDIS_URL` and fall back to in-memory when unavailable.
+- **App**: `nexus-app` — multi-stage Docker build (Next.js standalone output),
+  runs `prisma migrate deploy` on start, listens on port 3002.
+
+```bash
+docker compose up -d --build     # redis + app
+docker compose logs -f app
+```
+
+The public URL `https://nexus.rishitcodes.in` is served by the `nexus`
+Cloudflare tunnel (`~/.cloudflared/nexus.yml`, pm2 process `nexus-tunnel`)
+routing to `http://127.0.0.1:3002`.
+
+### Prisma/MySQL notes
+
+- The `nexus` DB user has full privileges (including `CREATE` for Prisma's
+  shadow database), so `npx prisma migrate dev` works on the host.
+- Containers run `npx prisma migrate deploy` at startup — no shadow database
+  is needed for that, and it keeps the DB in sync automatically.
+- Migration history was reconciled with the live database
+  (`20260808000200_unique_platform_message_id` reconstructed + checksums
+  fixed) — `prisma migrate status` reports "Database schema is up to date!".
+
 ## API surface (summary)
 
 - User: `/api/auth/register`, `/api/auth/register/request-otp`,
