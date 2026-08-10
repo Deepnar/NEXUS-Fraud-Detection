@@ -1,0 +1,356 @@
+"use client";
+
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, CheckCircle2, ClipboardList, Send, UserCheck, XCircle } from "lucide-react";
+import { RiskChip } from "@/components/RiskChip";
+
+interface AnalysisView {
+  id: string;
+  riskLevel: string;
+  score: number | null;
+  deterministicScore: number | null;
+  confidence: number | null;
+  summary: string | null;
+  modelVersion: string | null;
+  ruleVersion: string | null;
+  completedAt: string | null;
+  evidence: { type: string; severity: string; description: string }[] | null;
+  safeNextSteps: string[] | null;
+  limitations: string[] | null;
+  providerResults: Record<string, unknown> | null;
+  indicators: { id: string; type: string; severity: string; description: string }[];
+}
+
+interface IncidentView {
+  id: string;
+  status: string;
+  origin: string;
+  reason: string;
+  autoReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user: { id: string; name: string; email: string; phone: string | null } | null;
+  conversation: {
+    id: string;
+    source: string;
+    externalSenderId: string | null;
+    title: string;
+    status: string;
+    messages: { id: string; sender: string; content: string; createdAt: string }[];
+    extractedUrls: { id: string; rawUrl: string; host: string | null }[];
+    analysisResults: AnalysisView[];
+  };
+  notes: { id: string; note: string; createdAt: string; officer: { name: string } }[];
+  assignments: { officer: { id: string; name: string; email: string } }[];
+}
+
+interface OfficerLite {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export default function IncidentWorkspacePage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [incident, setIncident] = useState<IncidentView | null>(null);
+  const [officers, setOfficers] = useState<OfficerLite[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const [note, setNote] = useState("");
+  const [assignTo, setAssignTo] = useState("");
+  const [statusReason, setStatusReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const response = await fetch(`/api/officer/incidents/${params.id}`);
+      const data = await response.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setIncident(data.incident);
+      }
+      const officerResponse = await fetch("/api/officer/officers");
+      const officerData = await officerResponse.json();
+      if (!officerData.error) {
+        setOfficers(officerData.officers);
+      }
+    } catch {
+      setError("Could not load the case");
+    }
+  }, [params.id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function post(path: string, body: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "Request failed");
+      }
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Request failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function addNote() {
+    if (!note.trim()) return;
+    post(`/api/officer/incidents/${params.id}/notes`, { note }).then(() => setNote(""));
+  }
+
+  function assign() {
+    if (!assignTo) return;
+    post(`/api/officer/incidents/${params.id}/assign`, { officerId: assignTo }).then(() => setAssignTo(""));
+  }
+
+  function setStatus(status: string) {
+    const body: Record<string, unknown> = { status };
+    if (status === "RESOLVED" || status === "FALSE_POSITIVE") {
+      if (!statusReason.trim()) {
+        setError(`A reason is required to mark this case ${status.replace("_", " ").toLowerCase()}.`);
+        return;
+      }
+      body.reason = statusReason.trim();
+    }
+    post(`/api/officer/incidents/${params.id}/status`, body).then(() => setStatusReason(""));
+  }
+
+  if (error && !incident) {
+    return (
+      <main className="page">
+        <p className="error" role="alert">{error}</p>
+        <button className="button secondary" onClick={() => router.push("/officer")} type="button">
+          <ArrowLeft size={16} aria-hidden="true" /> Back to queue
+        </button>
+      </main>
+    );
+  }
+
+  if (!incident) {
+    return <main className="page muted">Loading case…</main>;
+  }
+
+  const analysis = incident.conversation.analysisResults[0];
+  const assignee = incident.assignments[0]?.officer;
+  const evidence = analysis?.evidence ?? analysis?.indicators ?? [];
+
+  return (
+    <main className="page">
+      <button className="button secondary" style={{ marginBottom: 16 }} onClick={() => router.push("/officer")} type="button">
+        <ArrowLeft size={16} aria-hidden="true" /> Back to queue
+      </button>
+
+      <section className="panel panel-pad" style={{ marginBottom: 20 }}>
+        <div className="status-line">
+          <h1 style={{ margin: 0, fontSize: 22 }}>{incident.conversation.title}</h1>
+          <RiskChip level={analysis?.riskLevel ?? "UNKNOWN"} />
+          <span className="chip">{incident.status}</span>
+          <span className="chip">{incident.conversation.source}</span>
+          {assignee && <span className="chip">Assigned: {assignee.name}</span>}
+        </div>
+        <p className="muted" style={{ marginTop: 10 }}>
+          Case {incident.id} · reported {new Date(incident.createdAt).toLocaleString()} · origin {incident.origin}
+        </p>
+        {incident.autoReason && (
+          <p className="muted" style={{ marginTop: 6, fontStyle: "italic" }}>{incident.autoReason}</p>
+        )}
+      </section>
+
+      <div className="workspace">
+        <div className="side-stack">
+          <section className="card">
+            <h3><ClipboardList size={15} style={{ verticalAlign: -2, marginRight: 6 }} aria-hidden="true" /> Conversation</h3>
+            <div className="chat">
+              {incident.conversation.messages.map((message) => (
+                <div className={`bubble ${message.sender === "USER" ? "user" : ""}`} key={message.id}>
+                  <div className="meta" style={{ marginBottom: 6 }}>
+                    <span className="chip">{message.sender}</span>
+                    <span className="muted">{new Date(message.createdAt).toLocaleString()}</span>
+                  </div>
+                  {message.content}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {incident.conversation.extractedUrls.length > 0 && (
+            <section className="card">
+              <h3>Extracted URLs</h3>
+              <ul className="url-list">
+                {incident.conversation.extractedUrls.map((url) => (
+                  <li key={url.id}>
+                    <span className="muted">{url.host ?? "unknown host"}</span>
+                    <br />
+                    {url.rawUrl}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section className="card">
+            <h3>Internal notes</h3>
+            <div className="side-stack" style={{ marginBottom: 12 }}>
+              {incident.notes.length === 0 && <p className="muted">No notes yet.</p>}
+              {incident.notes.map((item) => (
+                <div className="note-item" key={item.id}>
+                  <div className="who">
+                    <strong>{item.officer.name}</strong>
+                    <span>{new Date(item.createdAt).toLocaleString()}</span>
+                  </div>
+                  {item.note}
+                </div>
+              ))}
+            </div>
+            <div className="inline-form">
+              <textarea
+                className="note-input"
+                aria-label="Add an internal note"
+                placeholder="Add an internal note (visible to officers only)…"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+              />
+              <button className="button secondary" onClick={addNote} disabled={busy || !note.trim()} type="button">
+                <Send size={15} aria-hidden="true" /> Add note
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <div className="side-stack">
+          {analysis && (
+            <section className="card">
+              <h3>Analysis</h3>
+              <p style={{ fontSize: 15, lineHeight: 1.5, margin: "0 0 12px" }}>{analysis.summary}</p>
+              <div className="meta" style={{ marginBottom: 12 }}>
+                <span className="chip">Score {analysis.deterministicScore ?? analysis.score ?? "—"}/100</span>
+                {analysis.confidence != null && <span className="chip">Confidence {Math.round(analysis.confidence * 100)}%</span>}
+              </div>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                {analysis.modelVersion ?? "deterministic"} · rules {analysis.ruleVersion ?? "—"} ·{" "}
+                {analysis.completedAt ? `completed ${new Date(analysis.completedAt).toLocaleString()}` : "pending"}
+              </p>
+
+              <h3 style={{ marginTop: 16 }}>Evidence</h3>
+              {evidence.length === 0 ? (
+                <p className="muted">No signals detected.</p>
+              ) : (
+                <ul className="evidence-list">
+                  {evidence.map((item, index) => (
+                    <li key={`${item.type}-${index}`}>
+                      <span className={`sev sev-${item.severity}`}>{item.severity}</span>
+                      {item.description}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {analysis.safeNextSteps && analysis.safeNextSteps.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: 16 }}>Recommended next steps</h3>
+                  <ol className="step-list">
+                    {analysis.safeNextSteps.map((step, index) => (
+                      <li key={index}>{step}</li>
+                    ))}
+                  </ol>
+                </>
+              )}
+
+              {analysis.limitations && analysis.limitations.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: 16 }}>Limitations</h3>
+                  <ul className="step-list">
+                    {analysis.limitations.map((limitation, index) => (
+                      <li key={index}>{limitation}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {(() => {
+                const deepseek = analysis.providerResults?.deepseek as
+                  | { model?: string; status?: string }
+                  | undefined;
+                if (!deepseek) return null;
+                return (
+                  <p className="muted" style={{ marginTop: 12, fontSize: 12 }}>
+                    AI explanation: {deepseek.model ?? "deepseek"}
+                    {deepseek.status === "unavailable" &&
+                      " (unavailable — deterministic result used)"}
+                  </p>
+                );
+              })()}
+            </section>
+          )}
+
+          <section className="card">
+            <h3><UserCheck size={15} style={{ verticalAlign: -2, marginRight: 6 }} aria-hidden="true" /> Assignment</h3>
+            <div className="inline-form">
+              <select aria-label="Assign to officer" value={assignTo} onChange={(event) => setAssignTo(event.target.value)}>
+                <option value="">{assignee ? `Reassign (currently ${assignee.name})` : "Assign to…"}</option>
+                {officers.map((officer) => (
+                  <option key={officer.id} value={officer.id}>{officer.name} ({officer.email})</option>
+                ))}
+              </select>
+              <button className="button secondary" onClick={assign} disabled={busy || !assignTo} type="button">
+                Assign
+              </button>
+            </div>
+          </section>
+
+          <section className="card">
+            <h3>Status</h3>
+            <div className="inline-form">
+              <div className="status-line">
+                <button className="button" onClick={() => setStatus("INVESTIGATING")} disabled={busy} type="button">
+                  Investigate
+                </button>
+                <button className="button secondary" onClick={() => setStatus("RESOLVED")} disabled={busy} type="button">
+                  <CheckCircle2 size={15} aria-hidden="true" /> Resolve
+                </button>
+                <button className="button secondary" onClick={() => setStatus("FALSE_POSITIVE")} disabled={busy} type="button">
+                  <XCircle size={15} aria-hidden="true" /> False positive
+                </button>
+              </div>
+              <input
+                aria-label="Reason for resolving or marking false positive"
+                placeholder="Reason (required to resolve / false positive)…"
+                value={statusReason}
+                onChange={(event) => setStatusReason(event.target.value)}
+              />
+            </div>
+          </section>
+
+          <section className="card">
+            <h3>Reporter</h3>
+            {incident.user ? (
+              <p className="muted">
+                {incident.user.name} · {incident.user.email}
+                {incident.user.phone ? ` · ${incident.user.phone}` : ""}
+              </p>
+            ) : (
+              <p className="muted">
+                {incident.conversation.externalSenderId ?? "Anonymous"}
+                {incident.conversation.source === "WHATSAPP" ? " (WhatsApp sender, unlinked)" : ""}
+              </p>
+            )}
+          </section>
+        </div>
+      </div>
+    </main>
+  );
+}

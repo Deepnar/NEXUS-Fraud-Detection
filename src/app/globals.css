@@ -313,3 +313,307 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Risk levels (never color-only: always paired with a label) ---- */
+.risk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.risk-chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.risk-LOW {
+  background: #e5f4ec;
+  color: #1c7a4d;
+  border-color: #bfe6d1;
+}
+
+.risk-MEDIUM {
+  background: #fdf3d9;
+  color: #92610a;
+  border-color: #f0ddab;
+}
+
+.risk-HIGH {
+  background: #fdeee0;
+  color: #b45309;
+  border-color: #f5d3ae;
+}
+
+.risk-CRITICAL {
+  background: #fde8ea;
+  color: var(--danger);
+  border-color: #f5c2c7;
+}
+
+.risk-UNKNOWN {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* ---- Officer portal ---- */
+.officer-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 60px;
+  padding: 0 24px;
+  background: #102a33;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.officer-topbar .brand {
+  color: #fff;
+  font-size: 15px;
+}
+
+.officer-topbar nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.officer-topbar nav a {
+  color: #c9d8de;
+}
+
+.officer-topbar nav a:hover {
+  color: #fff;
+}
+
+.officer-topbar .who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #c9d8de;
+}
+
+.officer-topbar .role-badge {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.notif-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 6px;
+}
+
+/* ---- Incident table ---- */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+table.queue {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+table.queue th,
+table.queue td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+table.queue th {
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+table.queue tr:last-child td {
+  border-bottom: none;
+}
+
+table.queue tbody tr:hover {
+  background: #f4f8fa;
+  cursor: pointer;
+}
+
+table.queue td.title-cell {
+  max-width: 360px;
+}
+
+table.queue td.title-cell div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Officer workspace ---- */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.card h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.card .muted {
+  font-size: 13px;
+}
+
+.evidence-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-list li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.evidence-list .sev {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sev-critical,
+.sev-high {
+  color: var(--danger);
+}
+
+.sev-medium {
+  color: var(--warning);
+}
+
+.sev-low,
+.sev-info {
+  color: var(--muted);
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.filter-bar select,
+.filter-bar input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+
+.step-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.note-item {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.note-item .who {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+textarea.note-input {
+  width: 100%;
+  min-height: 90px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  resize: vertical;
+}
+
+.inline-form {
+  display: grid;
+  gap: 10px;
+}
+
+.status-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
