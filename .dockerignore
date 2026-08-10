@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env
+.env*.local
+*.log
+tsconfig.tsbuildinfo
+.next/
+coverage
+dist
+docs
+scripts
+vitest.config.ts
+README.md
