@@ -63,29 +63,48 @@ export default function IncidentWorkspacePage() {
   const [statusReason, setStatusReason] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const response = await fetch(`/api/officer/incidents/${params.id}`);
-      const data = await response.json();
-      if (data.error) {
-        setError(data.error);
-      } else {
-        setIncident(data.incident);
-      }
-      const officerResponse = await fetch("/api/officer/officers");
-      const officerData = await officerResponse.json();
-      if (!officerData.error) {
-        setOfficers(officerData.officers);
-      }
-    } catch {
-      setError("Could not load the case");
+  const fetchAll = useCallback(async () => {
+    const [incidentResponse, officerResponse] = await Promise.all([
+      fetch(`/api/officer/incidents/${params.id}`),
+      fetch("/api/officer/officers"),
+    ]);
+    const incidentData = await incidentResponse.json();
+    if (incidentData.error) {
+      throw new Error(incidentData.error);
     }
+    const officerData = await officerResponse.json();
+    return {
+      incident: incidentData.incident as IncidentView,
+      officers: officerData.error ? [] : (officerData.officers as OfficerLite[]),
+    };
   }, [params.id]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    fetchAll()
+      .then((result) => {
+        if (cancelled) return;
+        setIncident(result.incident);
+        setOfficers(result.officers);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load the case");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchAll]);
+
+  async function reload() {
+    setError(null);
+    try {
+      const result = await fetchAll();
+      setIncident(result.incident);
+      setOfficers(result.officers);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load the case");
+    }
+  }
 
   async function post(path: string, body: Record<string, unknown>) {
     setBusy(true);
@@ -99,7 +118,7 @@ export default function IncidentWorkspacePage() {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? "Request failed");
       }
-      await load();
+      await reload();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Request failed");
     } finally {

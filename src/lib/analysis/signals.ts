@@ -37,23 +37,6 @@ const IMPERSONATION_PATTERNS: RegExp[] = [
   /\b(official (bank|partner|agent)|authorized (agent|representative))\b/i,
 ];
 
-const SHORTENER_HOSTS = new Set([
-  "bit.ly",
-  "tinyurl.com",
-  "t.co",
-  "goo.gl",
-  "is.gd",
-  "cutt.ly",
-  "rb.gy",
-  "shorturl.at",
-  "tiny.cc",
-  "ow.ly",
-  "buff.ly",
-  "rebrand.ly",
-  "s.id",
-  "gg.gg",
-]);
-
 const CHANNEL_SWITCH_PATTERNS: RegExp[] = [
   /\b(message|contact|text|ping) me (on|at) (telegram|signal|whatsapp|instagram|snapchat)\b/i,
   /\b(switch|move|continue) (to|on) (telegram|signal|whatsapp)\b/i,

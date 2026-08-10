@@ -47,38 +47,57 @@ export default function OfficerQueuePage() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        status,
-        page: "1",
-        pageSize: "50",
-      });
-      if (risk) params.set("risk", risk);
-      if (source) params.set("source", source);
-      if (assignee) params.set("assignee", assignee);
-      if (debouncedQuery) params.set("q", debouncedQuery);
+  const fetchQueue = useCallback(async () => {
+    const params = new URLSearchParams({
+      status,
+      page: "1",
+      pageSize: "50",
+    });
+    if (risk) params.set("risk", risk);
+    if (source) params.set("source", source);
+    if (assignee) params.set("assignee", assignee);
+    if (debouncedQuery) params.set("q", debouncedQuery);
 
-      const response = await fetch(`/api/officer/incidents?${params.toString()}`);
-      const data = await response.json();
-      if (data.error) {
-        setError(data.error);
-      } else {
-        setItems(data.incidents);
-        setTotal(data.total);
-      }
-    } catch {
-      setError("Could not load the incident queue");
-    } finally {
-      setLoading(false);
+    const response = await fetch(`/api/officer/incidents?${params.toString()}`);
+    const data = await response.json();
+    if (data.error) {
+      throw new Error(data.error);
     }
+    return data as { incidents: QueueItem[]; total: number };
   }, [status, risk, source, assignee, debouncedQuery]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    fetchQueue()
+      .then((data) => {
+        if (cancelled) return;
+        setItems(data.incidents);
+        setTotal(data.total);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load the incident queue");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchQueue]);
+
+  async function refresh() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchQueue();
+      setItems(data.incidents);
+      setTotal(data.total);
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : "Could not load the incident queue");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <main className="page">
@@ -89,7 +108,7 @@ export default function OfficerQueuePage() {
             {total} case{total === 1 ? "" : "s"} match the current filters.
           </p>
         </div>
-        <button className="button secondary" onClick={load} type="button">
+        <button className="button secondary" onClick={refresh} type="button">
           <RefreshCw size={16} aria-hidden="true" />
           Refresh
         </button>

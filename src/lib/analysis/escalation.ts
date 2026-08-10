@@ -1,4 +1,4 @@
-import { IncidentOrigin, IncidentStatus, RiskLevel } from "@prisma/client";
+import { IncidentOrigin, IncidentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 /**

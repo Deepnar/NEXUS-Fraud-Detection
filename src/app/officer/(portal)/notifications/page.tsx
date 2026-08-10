@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Bell } from "lucide-react";
-import { RiskChip } from "@/components/RiskChip";
 
 interface NotificationItem {
   id: string;
