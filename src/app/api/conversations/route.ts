@@ -10,6 +10,8 @@ import {
 } from "@/lib/db-errors";
 import { prisma } from "@/lib/prisma";
 import { extractUrls, titleFromMessage } from "@/lib/url-extraction";
+import { analysisRateLimiter, rateLimitKey } from "@/lib/rate-limiter";
+import { runAnalysisPipeline } from "@/lib/analysis/pipeline";
 
 const createConversationSchema = z.object({
   source: z.nativeEnum(ConversationSource).default(ConversationSource.WEB),
@@ -67,6 +69,11 @@ export async function POST(request: Request) {
     return jsonError("Unauthorized", 401);
   }
 
+  const limit = analysisRateLimiter.check(rateLimitKey(request, session.userId));
+  if (!limit.ok) {
+    return jsonError("Rate limit exceeded", 429);
+  }
+
   try {
     const body = createConversationSchema.parse(await request.json());
     const extractedUrls = extractUrls(body.message);
@@ -87,24 +94,27 @@ export async function POST(request: Request) {
         extractedUrls: {
           create: extractedUrls,
         },
-        analysisResults: {
-          create: {
-            summary: "Analysis engine is queued for a later phase. Message and URLs were stored successfully.",
-            evidence: {
-              urlCount: extractedUrls.length,
-              phase: "phase-1-storage",
-            },
-          },
-        },
       },
       include: {
         messages: { orderBy: { createdAt: "asc" } },
         extractedUrls: true,
-        analysisResults: true,
       },
     });
 
-    return jsonOk({ conversation }, { status: 201 });
+    // Run the real analysis pipeline (deterministic rules + optional AI
+    // explanation) instead of the old placeholder result.
+    const analysis = await runAnalysisPipeline({
+      conversationId: conversation.id,
+      idempotencyKey: `web:${conversation.id}:initial`,
+      messageContent: body.message,
+    });
+
+    const fullAnalysis = await prisma.analysisResult.findUnique({
+      where: { id: analysis.id },
+      include: { indicators: true, urlChecks: true },
+    });
+
+    return jsonOk({ conversation, analysis: fullAnalysis }, { status: 201 });
   } catch (error) {
     if (isDatabaseUnavailable(error)) {
       return jsonError(databaseUnavailableMessage(), 503);
