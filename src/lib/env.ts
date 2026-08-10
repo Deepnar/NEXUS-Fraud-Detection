@@ -17,6 +17,16 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
+  /** Shared secret protecting the n8n automation ingest endpoints. */
+  WHATSAPP_INGEST_SECRET: z.string().optional(),
+  /** Optional DeepSeek API key. When set, the analysis pipeline can ask
+   *  DeepSeek to explain deterministic results. n8n may own this key
+   *  instead; NEXUS never requires it. */
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_BASE_URL: z.string().url().optional(),
+  DEEPSEEK_MODEL: z.string().default("deepseek-chat"),
+  /** Optional Redis URL for distributed rate limits and job locks. */
+  REDIS_URL: z.string().optional(),
 });
 
 export const env = envSchema.parse({
@@ -29,4 +39,9 @@ export const env = envSchema.parse({
   SMTP_USER: process.env.SMTP_USER,
   SMTP_PASS: process.env.SMTP_PASS,
   SMTP_FROM: process.env.SMTP_FROM,
+  WHATSAPP_INGEST_SECRET: process.env.WHATSAPP_INGEST_SECRET,
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
+  DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL,
+  DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL,
+  REDIS_URL: process.env.REDIS_URL,
 });
