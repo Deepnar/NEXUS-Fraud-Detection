@@ -4,6 +4,8 @@ import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { createOtp, hashOtp, otpExpiryDate } from "@/lib/otp";
 import { sendRegistrationOtpEmail } from "@/lib/mailer";
+import { authRateLimiter, clientIp, rateLimitKey } from "@/lib/rate-limiter";
+import { hashIp, logAudit } from "@/lib/audit";
 import {
   databaseSchemaMissingMessage,
   databaseUnavailableMessage,
@@ -21,6 +23,12 @@ const registerSchema = z.object({
 export async function POST(request: Request) {
   try {
     const body = registerSchema.parse(await request.json());
+
+    const limit = authRateLimiter.check(rateLimitKey(request, `register:${body.email}`));
+    if (!limit.ok) {
+      return jsonError("Too many attempts. Try again later.", 429);
+    }
+
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ email: body.email }, ...(body.phone ? [{ phone: body.phone }] : [])],
@@ -57,6 +65,14 @@ export async function POST(request: Request) {
       to: body.email,
       name: body.name,
       otp,
+    });
+
+    await logAudit({
+      actorType: "SYSTEM",
+      action: "user.register.otp_sent",
+      targetType: "user",
+      metadata: { email: body.email },
+      ipHash: hashIp(clientIp(request)),
     });
 
     return jsonOk({ ok: true, message: "Verification code sent" });

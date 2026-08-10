@@ -10,6 +10,8 @@ import {
 } from "@/lib/db-errors";
 import { hashOtp, OTP_MAX_ATTEMPTS } from "@/lib/otp";
 import { prisma } from "@/lib/prisma";
+import { authRateLimiter, clientIp, rateLimitKey } from "@/lib/rate-limiter";
+import { hashIp, logAudit } from "@/lib/audit";
 
 const verifyOtpSchema = z.object({
   email: z.string().trim().email("Enter a valid email").toLowerCase(),
@@ -19,6 +21,12 @@ const verifyOtpSchema = z.object({
 export async function POST(request: Request) {
   try {
     const body = verifyOtpSchema.parse(await request.json());
+
+    const limit = authRateLimiter.check(rateLimitKey(request, `verify:${body.email}`));
+    if (!limit.ok) {
+      return jsonError("Too many attempts. Try again later.", 429);
+    }
+
     const pending = await prisma.registrationOtp.findUnique({
       where: { email: body.email },
     });
@@ -66,6 +74,16 @@ export async function POST(request: Request) {
 
     const token = await createSession({ userId: user.id, email: user.email });
     await setSessionCookie(token);
+
+    await logAudit({
+      actorType: "USER",
+      actorId: user.id,
+      action: "user.register.completed",
+      targetType: "user",
+      targetId: user.id,
+      metadata: { email: user.email },
+      ipHash: hashIp(clientIp(request)),
+    });
 
     return jsonOk({ user }, { status: 201 });
   } catch (error) {

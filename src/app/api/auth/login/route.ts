@@ -9,6 +9,8 @@ import {
 } from "@/lib/db-errors";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { authRateLimiter, clientIp, rateLimitKey } from "@/lib/rate-limiter";
+import { hashIp, logAudit } from "@/lib/audit";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Enter a valid email").toLowerCase(),
@@ -18,16 +20,39 @@ const loginSchema = z.object({
 export async function POST(request: Request) {
   try {
     const body = loginSchema.parse(await request.json());
+
+    const limit = authRateLimiter.check(rateLimitKey(request, `login:${body.email}`));
+    if (!limit.ok) {
+      return jsonError("Too many attempts. Try again later.", 429);
+    }
+
     const user = await prisma.user.findUnique({
       where: { email: body.email },
     });
 
     if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
+      await logAudit({
+        actorType: "SYSTEM",
+        action: "user.login.failed",
+        targetType: "user",
+        targetId: user?.id ?? null,
+        metadata: { email: body.email },
+        ipHash: hashIp(clientIp(request)),
+      });
       return jsonError("Invalid email or password", 401);
     }
 
     const token = await createSession({ userId: user.id, email: user.email });
     await setSessionCookie(token);
+
+    await logAudit({
+      actorType: "USER",
+      actorId: user.id,
+      action: "user.login.success",
+      targetType: "user",
+      targetId: user.id,
+      ipHash: hashIp(clientIp(request)),
+    });
 
     return jsonOk({
       user: {
