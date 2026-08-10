@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   try {
     const body = registerSchema.parse(await request.json());
 
-    const limit = authRateLimiter.check(rateLimitKey(request, `register:${body.email}`));
+    const limit = await authRateLimiter.check(rateLimitKey(request, `register:${body.email}`));
     if (!limit.ok) {
       return jsonError("Too many attempts. Try again later.", 429);
     }

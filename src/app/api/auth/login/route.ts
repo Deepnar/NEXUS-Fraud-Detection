@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   try {
     const body = loginSchema.parse(await request.json());
 
-    const limit = authRateLimiter.check(rateLimitKey(request, `login:${body.email}`));
+    const limit = await authRateLimiter.check(rateLimitKey(request, `login:${body.email}`));
     if (!limit.ok) {
       return jsonError("Too many attempts. Try again later.", 429);
     }

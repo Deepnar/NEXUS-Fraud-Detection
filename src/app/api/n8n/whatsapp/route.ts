@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     return jsonError(auth.reason, auth.status);
   }
 
-  const limit = ingestRateLimiter.check(rateLimitKey(request, "probe"));
+  const limit = await ingestRateLimiter.check(rateLimitKey(request, "probe"));
   if (!limit.ok) {
     return jsonError("Rate limit exceeded", 429);
   }
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     return jsonError(auth.reason, auth.status);
   }
 
-  const limit = ingestRateLimiter.check(rateLimitKey(request, "ingest"));
+  const limit = await ingestRateLimiter.check(rateLimitKey(request, "ingest"));
   if (!limit.ok) {
     return jsonError("Rate limit exceeded", 429);
   }

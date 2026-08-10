@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     return jsonError(auth.reason, auth.status);
   }
 
-  const limit = ingestRateLimiter.check(rateLimitKey(request, "notification"));
+  const limit = await ingestRateLimiter.check(rateLimitKey(request, "notification"));
   if (!limit.ok) {
     return jsonError("Rate limit exceeded", 429);
   }

@@ -17,7 +17,7 @@ export async function POST(request: Request, { params }: Params) {
     return jsonError("Unauthorized", 401);
   }
 
-  const limit = analysisRateLimiter.check(rateLimitKey(request, `${user.id}:retry`));
+  const limit = await analysisRateLimiter.check(rateLimitKey(request, `${user.id}:retry`));
   if (!limit.ok) {
     return jsonError("Rate limit exceeded", 429);
   }

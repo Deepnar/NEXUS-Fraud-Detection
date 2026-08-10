@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const body = verifyOtpSchema.parse(await request.json());
 
-    const limit = authRateLimiter.check(rateLimitKey(request, `verify:${body.email}`));
+    const limit = await authRateLimiter.check(rateLimitKey(request, `verify:${body.email}`));
     if (!limit.ok) {
       return jsonError("Too many attempts. Try again later.", 429);
     }

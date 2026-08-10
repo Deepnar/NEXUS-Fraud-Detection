@@ -14,7 +14,7 @@ const loginSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const limit = authRateLimiter.check(rateLimitKey(request, "officer-login"));
+  const limit = await authRateLimiter.check(rateLimitKey(request, "officer-login"));
   if (!limit.ok) {
     return jsonError("Too many attempts. Try again later.", 429);
   }

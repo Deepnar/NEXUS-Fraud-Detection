@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     return jsonError("Unauthorized", 401);
   }
 
-  const limit = analysisRateLimiter.check(rateLimitKey(request, session.userId));
+  const limit = await analysisRateLimiter.check(rateLimitKey(request, session.userId));
   if (!limit.ok) {
     return jsonError("Rate limit exceeded", 429);
   }

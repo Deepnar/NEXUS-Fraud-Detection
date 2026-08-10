@@ -1,14 +1,12 @@
-/**
- * In-memory sliding-window rate limiter.
- *
- * Distributed Redis-backed limits can be added later behind the same
- * interface (REDIS_URL); the in-memory store is correct for a single
- * Next.js instance and keeps the automation/auth endpoints safe today.
- */
+import { getRedis } from "@/lib/redis";
 
-interface WindowEntry {
-  timestamps: number[];
-}
+/**
+ * Sliding-window in-memory rate limiter + fixed-window Redis backend.
+ *
+ * The exported limiters prefer Redis (distributed, survives restarts) and
+ * transparently fall back to the in-memory store when REDIS_URL is unset or
+ * Redis is unreachable — the app must never break because a limiter is down.
+ */
 
 export interface RateLimitResult {
   ok: boolean;
@@ -16,78 +14,117 @@ export interface RateLimitResult {
   retryAfterMs: number;
 }
 
-export function createRateLimiter(options: {
-  windowMs: number;
-  max: number;
-  keyPrefix: string;
-}) {
-  const { windowMs, max, keyPrefix } = options;
-  const store = new Map<string, WindowEntry>();
+export interface RateLimiter {
+  check(key: string): Promise<RateLimitResult>;
+}
 
-  function prune(key: string, now: number) {
-    const entry = store.get(key);
+class MemoryRateLimiter implements RateLimiter {
+  private readonly store = new Map<string, number[]>();
+
+  constructor(
+    private readonly windowMs: number,
+    private readonly max: number,
+    private readonly keyPrefix: string
+  ) {}
+
+  private prune(key: string, now: number) {
+    const entry = this.store.get(key);
     if (!entry) {
       return;
     }
-    entry.timestamps = entry.timestamps.filter((t) => now - t < windowMs);
-    if (entry.timestamps.length === 0) {
-      store.delete(key);
+    const kept = entry.filter((t) => now - t < this.windowMs);
+    if (kept.length === 0) {
+      this.store.delete(key);
+    } else {
+      this.store.set(key, kept);
     }
   }
 
-  return {
-    check(key: string): RateLimitResult {
-      const now = Date.now();
-      const fullKey = `${keyPrefix}:${key}`;
-      prune(fullKey, now);
+  async check(key: string): Promise<RateLimitResult> {
+    const now = Date.now();
+    const fullKey = `${this.keyPrefix}:${key}`;
+    this.prune(fullKey, now);
 
-      const entry = store.get(fullKey) ?? { timestamps: [] };
+    const entry = this.store.get(fullKey) ?? [];
 
-      if (entry.timestamps.length >= max) {
-        const oldest = entry.timestamps[0];
-        const retryAfterMs = Math.max(1, oldest + windowMs - now);
-        return { ok: false, remaining: 0, retryAfterMs };
+    if (entry.length >= this.max) {
+      const oldest = entry[0];
+      return {
+        ok: false,
+        remaining: 0,
+        retryAfterMs: Math.max(1, oldest + this.windowMs - now),
+      };
+    }
+
+    entry.push(now);
+    this.store.set(fullKey, entry);
+    return { ok: true, remaining: this.max - entry.length, retryAfterMs: 0 };
+  }
+}
+
+class RedisRateLimiter implements RateLimiter {
+  private readonly fallback: MemoryRateLimiter;
+
+  constructor(
+    private readonly windowMs: number,
+    private readonly max: number,
+    private readonly keyPrefix: string
+  ) {
+    this.fallback = new MemoryRateLimiter(windowMs, max, keyPrefix);
+  }
+
+  async check(key: string): Promise<RateLimitResult> {
+    const redis = getRedis();
+    if (!redis) {
+      return this.fallback.check(key);
+    }
+
+    const fullKey = `${this.keyPrefix}:${key}`;
+    try {
+      const results = await redis
+        .multi()
+        .incr(fullKey)
+        .expire(fullKey, Math.max(1, Math.ceil(this.windowMs / 1000)), "NX")
+        .exec();
+
+      const count = (results?.[0]?.[1] as number | undefined) ?? 1;
+
+      if (count > this.max) {
+        const ttl = await redis.ttl(fullKey);
+        return {
+          ok: false,
+          remaining: 0,
+          retryAfterMs: Math.max(1, ttl * 1000),
+        };
       }
-
-      entry.timestamps.push(now);
-      store.set(fullKey, entry);
-      return { ok: true, remaining: max - entry.timestamps.length, retryAfterMs: 0 };
-    },
-    /** Best-effort cleanup of expired keys; call periodically in prod. */
-    cleanup(): number {
-      const now = Date.now();
-      let removed = 0;
-      for (const key of store.keys()) {
-        prune(key, now);
-        if (!store.has(key)) {
-          removed += 1;
-        }
-      }
-      return removed;
-    },
-  };
+      return { ok: true, remaining: this.max - count, retryAfterMs: 0 };
+    } catch {
+      // Redis unavailable → in-memory fallback for this instance.
+      return this.fallback.check(key);
+    }
+  }
 }
 
 /** Auth endpoints: 10 attempts per 15 minutes per IP+user-agent. */
-export const authRateLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  keyPrefix: "auth",
-});
+export const authRateLimiter: RateLimiter = new RedisRateLimiter(
+  15 * 60 * 1000,
+  10,
+  "auth"
+);
 
 /** WhatsApp/automation ingest: 60 requests per minute per IP. */
-export const ingestRateLimiter = createRateLimiter({
-  windowMs: 60 * 1000,
-  max: 60,
-  keyPrefix: "ingest",
-});
+export const ingestRateLimiter: RateLimiter = new RedisRateLimiter(
+  60 * 1000,
+  60,
+  "ingest"
+);
 
 /** Analysis creation: 20 per minute per user. */
-export const analysisRateLimiter = createRateLimiter({
-  windowMs: 60 * 1000,
-  max: 20,
-  keyPrefix: "analysis",
-});
+export const analysisRateLimiter: RateLimiter = new RedisRateLimiter(
+  60 * 1000,
+  20,
+  "analysis"
+);
 
 export function clientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
