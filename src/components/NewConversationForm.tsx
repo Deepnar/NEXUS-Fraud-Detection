@@ -1,6 +1,6 @@
 "use client";
 
-import { Send } from "lucide-react";
+import { Loader2, Send, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -45,10 +45,26 @@ export function NewConversationForm() {
           placeholder="Paste a suspicious SMS, email, WhatsApp message, or URL..."
         />
       </div>
+
+      <p className="muted" style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "flex-start" }}>
+        <ShieldCheck size={16} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
+        Privacy: only the minimum text needed for fraud analysis is stored. Never enter
+        passwords, OTPs, or full payment credentials.
+      </p>
+
       {error ? <p className="error">{error}</p> : null}
       <button className="button" type="submit" disabled={loading}>
-        <Send size={16} aria-hidden="true" />
-        {loading ? "Saving..." : "Save Analysis"}
+        {loading ? (
+          <>
+            <Loader2 size={16} className="spin" aria-hidden="true" />
+            Analyzing…
+          </>
+        ) : (
+          <>
+            <Send size={16} aria-hidden="true" />
+            Run Analysis
+          </>
+        )}
       </button>
     </form>
   );

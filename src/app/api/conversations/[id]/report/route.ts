@@ -2,6 +2,7 @@ import { ConversationStatus } from "@prisma/client";
 import { z } from "zod";
 import { jsonError, jsonOk, parseJsonError } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
 const reportSchema = z.object({
@@ -32,6 +33,19 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const report = await prisma.$transaction(async (tx) => {
+      // Duplicate-report protection: one open report per conversation.
+      const existing = await tx.incidentReport.findFirst({
+        where: {
+          conversationId: id,
+          status: { in: ["PENDING", "INVESTIGATING"] },
+        },
+        select: { id: true },
+      });
+
+      if (existing) {
+        throw new DuplicateReportError(existing.id);
+      }
+
       const created = await tx.incidentReport.create({
         data: {
           conversationId: id,
@@ -48,8 +62,30 @@ export async function POST(request: Request, { params }: Params) {
       return created;
     });
 
+    await logAudit({
+      actorType: "USER",
+      actorId: session.userId,
+      action: "incident.reported",
+      targetType: "conversation",
+      targetId: id,
+      metadata: { reportId: report.id },
+    });
+
     return jsonOk({ report }, { status: 201 });
   } catch (error) {
+    if (error instanceof DuplicateReportError) {
+      return jsonError(
+        "This conversation already has an open report with an officer.",
+        409
+      );
+    }
     return jsonError(parseJsonError(error), 400);
+  }
+}
+
+class DuplicateReportError extends Error {
+  constructor(public readonly reportId: string) {
+    super("duplicate report");
+    this.name = "DuplicateReportError";
   }
 }

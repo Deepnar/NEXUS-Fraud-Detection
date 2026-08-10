@@ -292,6 +292,16 @@ textarea {
   font-size: 14px;
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
 @media (max-width: 760px) {
   .topbar {
     align-items: flex-start;

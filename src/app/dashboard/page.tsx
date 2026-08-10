@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MessageSquarePlus } from "lucide-react";
 import { LogoutButton } from "@/components/LogoutButton";
+import { DashboardContent, DashboardConversation } from "@/components/DashboardContent";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -23,7 +24,28 @@ export default async function DashboardPage() {
     },
   });
 
-  const reportedCount = conversations.filter((item) => item.incidentReports.length > 0).length;
+  const rows: DashboardConversation[] = conversations.map((conversation) => {
+    const latestAnalysis = conversation.analysisResults[0];
+    return {
+      id: conversation.id,
+      title: conversation.title,
+      source: conversation.source,
+      status: conversation.status,
+      updatedAt: conversation.updatedAt.toISOString(),
+      latestMessage: conversation.messages[0]?.content ?? null,
+      urlCount: conversation.extractedUrls.length,
+      riskLevel: latestAnalysis?.riskLevel ?? null,
+      score: latestAnalysis?.score ?? null,
+      analysisStatus: latestAnalysis?.status ?? null,
+      reported: conversation.incidentReports.length > 0,
+    };
+  });
+
+  const highRisk = rows.filter(
+    (row) => row.riskLevel === "HIGH" || row.riskLevel === "CRITICAL"
+  ).length;
+  const reported = rows.filter((row) => row.reported).length;
+  const awaiting = rows.filter((row) => row.analysisStatus === "PENDING").length;
 
   return (
     <main className="page">
@@ -43,46 +65,24 @@ export default async function DashboardPage() {
 
       <section className="grid" style={{ marginBottom: 24 }}>
         <div className="panel stat">
-          <strong>{conversations.length}</strong>
-          <span className="muted">Saved conversations</span>
+          <strong>{rows.length}</strong>
+          <span className="muted">Total conversations</span>
         </div>
         <div className="panel stat">
-          <strong>{reportedCount}</strong>
+          <strong>{highRisk}</strong>
+          <span className="muted">High / critical risk</span>
+        </div>
+        <div className="panel stat">
+          <strong>{reported}</strong>
           <span className="muted">Reported incidents</span>
         </div>
         <div className="panel stat">
-          <strong>
-            {conversations.reduce((total, item) => total + item.extractedUrls.length, 0)}
-          </strong>
-          <span className="muted">Extracted URLs</span>
+          <strong>{awaiting}</strong>
+          <span className="muted">Analyses awaiting completion</span>
         </div>
       </section>
 
-      <section className="list">
-        {conversations.length === 0 ? (
-          <div className="panel panel-pad">
-            <h2>No conversations yet</h2>
-            <p className="muted">Paste a suspicious message to create the first analysis thread.</p>
-          </div>
-        ) : (
-          conversations.map((conversation) => (
-            <Link className="conversation-row" href={`/conversations/${conversation.id}`} key={conversation.id}>
-              <div>
-                <h2>{conversation.title}</h2>
-                <p className="muted">{conversation.messages[0]?.content ?? "No messages stored"}</p>
-                <div className="meta" style={{ marginTop: 10 }}>
-                  <span className="chip">{conversation.source}</span>
-                  <span className="chip">{conversation.extractedUrls.length} URLs</span>
-                  <span className={`chip ${conversation.incidentReports.length ? "reported" : ""}`}>
-                    {conversation.incidentReports.length ? "REPORTED" : conversation.status}
-                  </span>
-                </div>
-              </div>
-              <span className="muted">{conversation.updatedAt.toLocaleDateString()}</span>
-            </Link>
-          ))
-        )}
-      </section>
+      <DashboardContent conversations={rows} />
     </main>
   );
 }
