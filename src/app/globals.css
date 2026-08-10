@@ -627,3 +627,76 @@ textarea.note-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Mobile: officer topbar + tight screens ---- */
+@media (max-width: 760px) {
+  .officer-topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+
+  .officer-topbar nav {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .officer-topbar .who {
+    margin-left: auto;
+  }
+
+  .officer-topbar .button.secondary {
+    min-height: 34px;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .page {
+    width: calc(100% - 20px);
+    margin: 16px auto;
+  }
+
+  .panel-pad {
+    padding: 16px;
+  }
+
+  .page-head h1,
+  .auth-page h1 {
+    font-size: 24px;
+  }
+
+  .filter-bar {
+    gap: 8px;
+  }
+
+  .filter-bar input,
+  .filter-bar select {
+    flex: 1 1 100%;
+  }
+
+  .filter-bar input {
+    min-width: 0 !important;
+  }
+
+  .button-row .button {
+    flex: 1 1 auto;
+  }
+
+  /* The queue table keeps readable columns and scrolls sideways. */
+  table.queue {
+    min-width: 720px;
+  }
+
+  .status-line {
+    align-items: stretch;
+  }
+
+  .status-line .button {
+    flex: 1 1 auto;
+  }
+
+  .bubble {
+    max-width: 100%;
+  }
+}
