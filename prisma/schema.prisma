@@ -52,22 +52,35 @@ enum IncidentStatus {
   FALSE_POSITIVE
 }
 
+enum IncidentOrigin {
+  USER
+  AUTO
+}
+
 enum OfficerRole {
   OFFICER
   ADMIN
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model User {
-  id           String         @id @default(cuid())
-  name         String
-  email        String         @unique
-  phone        String?        @unique
-  passwordHash String
+  id              String         @id @default(cuid())
+  name            String
+  email           String         @unique
+  phone           String?        @unique
+  passwordHash    String
+  role            UserRole       @default(USER)
   emailVerifiedAt DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  conversations Conversation[]
-  reports      IncidentReport[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  conversations   Conversation[]
+  reports         IncidentReport[]
+  sessions        UserSession[]
+  notifications   Notification[]
 
   @@index([createdAt])
 }
@@ -88,14 +101,18 @@ model RegistrationOtp {
 }
 
 model Officer {
-  id           String        @id @default(cuid())
-  name         String
-  email        String        @unique
-  passwordHash String
-  role         OfficerRole   @default(OFFICER)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  notes        OfficerNote[]
+  id            String                @id @default(cuid())
+  name          String
+  email         String                @unique
+  passwordHash  String
+  role          OfficerRole           @default(OFFICER)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  notes         OfficerNote[]
+  sessions      OfficerSession[]
+  assignments   IncidentAssignment[]
+  notifications Notification[]
+  mfaChallenges MfaChallenge[]
 }
 
 model Conversation {
@@ -112,6 +129,7 @@ model Conversation {
   extractedUrls    ExtractedUrl[]
   analysisResults  AnalysisResult[]
   incidentReports  IncidentReport[]
+  analysisJobs     AnalysisJob[]
 
   @@index([userId, updatedAt])
   @@index([source, externalSenderId])
@@ -124,13 +142,12 @@ model Message {
   sender            MessageSender @default(USER)
   type              MessageType   @default(TEXT)
   content           String        @db.Text
-  platformMessageId String?
+  platformMessageId String?       @unique
   metadata          Json?
   createdAt         DateTime      @default(now())
   conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
-  @@index([platformMessageId])
 }
 
 model ExtractedUrl {
@@ -147,20 +164,75 @@ model ExtractedUrl {
   @@index([host])
 }
 
+model AnalysisJob {
+  id              String         @id @default(cuid())
+  conversationId  String
+  idempotencyKey  String         @unique
+  status          AnalysisStatus @default(PENDING)
+  attempts        Int            @default(0)
+  errorDetails    Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  conversation    Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  result          AnalysisResult?
+
+  @@index([status, createdAt])
+}
+
 model AnalysisResult {
-  id             String         @id @default(cuid())
-  conversationId String
-  status         AnalysisStatus @default(PENDING)
-  riskLevel      RiskLevel      @default(UNKNOWN)
-  score          Float?
-  summary        String?        @db.Text
-  evidence       Json?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id                 String             @id @default(cuid())
+  conversationId     String
+  status             AnalysisStatus     @default(PENDING)
+  riskLevel          RiskLevel          @default(UNKNOWN)
+  score              Float?
+  deterministicScore Int?
+  confidence         Float?
+  summary            String?            @db.Text
+  evidence           Json?
+  safeNextSteps      Json?
+  limitations        Json?
+  providerResults    Json?
+  modelVersion       String?
+  ruleVersion        String?
+  failureCode        String?
+  completedAt        DateTime?
+  jobId              String?            @unique
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  conversation       Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  job                AnalysisJob?       @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  urlChecks          UrlCheck[]
+  indicators         MessageIndicator[]
 
   @@index([conversationId, createdAt])
   @@index([riskLevel])
+}
+
+model UrlCheck {
+  id               String         @id @default(cuid())
+  analysisResultId String
+  urlHash          String         @db.Char(64)
+  provider         String
+  status           String         @default("CHECKED")
+  verdict          String?
+  score            Float?
+  reason           String?        @db.Text
+  metadata         Json?
+  checkedAt        DateTime       @default(now())
+  analysisResult   AnalysisResult @relation(fields: [analysisResultId], references: [id], onDelete: Cascade)
+
+  @@index([analysisResultId])
+}
+
+model MessageIndicator {
+  id               String         @id @default(cuid())
+  analysisResultId String
+  type             String
+  severity         String
+  description      String         @db.Text
+  analysisResult   AnalysisResult @relation(fields: [analysisResultId], references: [id], onDelete: Cascade)
+
+  @@index([analysisResultId])
 }
 
 model IncidentReport {
@@ -169,14 +241,29 @@ model IncidentReport {
   userId         String?
   reason         String         @db.Text
   status         IncidentStatus @default(PENDING)
+  origin         IncidentOrigin @default(USER)
+  autoReason     String?        @db.Text
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   notes          OfficerNote[]
+  assignments    IncidentAssignment[]
 
   @@index([conversationId])
   @@index([status, createdAt])
+}
+
+model IncidentAssignment {
+  id               String         @id @default(cuid())
+  incidentReportId String         @unique
+  officerId        String
+  assignedAt       DateTime       @default(now())
+  assignedBy       String
+  incidentReport   IncidentReport @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  officer          Officer        @relation(fields: [officerId], references: [id], onDelete: Cascade)
+
+  @@index([officerId])
 }
 
 model OfficerNote {
@@ -189,4 +276,89 @@ model OfficerNote {
   officer          Officer        @relation(fields: [officerId], references: [id], onDelete: Cascade)
 
   @@index([incidentReportId, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorType  String
+  actorId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, action])
+}
+
+model Notification {
+  id              String    @id @default(cuid())
+  userId          String?
+  officerId       String?
+  type            String
+  title           String
+  body            String    @db.Text
+  readAt          DateTime?
+  deliveryStatus  String    @default("PENDING")
+  retryCount      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  officer         Officer?  @relation(fields: [officerId], references: [id], onDelete: Cascade)
+
+  @@index([officerId, readAt])
+  @@index([userId, readAt])
+}
+
+model UserSession {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  device    String?
+  ipHash    String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model OfficerSession {
+  id        String    @id @default(cuid())
+  officerId String
+  tokenHash String    @unique
+  device    String?
+  ipHash    String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  officer   Officer   @relation(fields: [officerId], references: [id], onDelete: Cascade)
+
+  @@index([officerId, expiresAt])
+}
+
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String?
+  officerId  String?
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model MfaChallenge {
+  id         String   @id @default(cuid())
+  officerId  String
+  codeHash   String
+  attempts   Int      @default(0)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  officer    Officer  @relation(fields: [officerId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
