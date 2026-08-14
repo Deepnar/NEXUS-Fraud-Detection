@@ -19,3 +19,7 @@ tsconfig.tsbuildinfo
 /readme
 /data/
 /datasets/
+/ml/artifacts/
+/.venv-ml/
+__pycache__/
+*.pyc

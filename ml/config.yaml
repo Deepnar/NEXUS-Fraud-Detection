@@ -1,0 +1,22 @@
+seed: 42
+output_dir: ml/artifacts
+data:
+  url_dataset: PhiUSIIL_Phishing_URL_Dataset.csv
+  phishtank_dataset: verified_online.csv
+  benign_domains: top-1m.csv
+  message_dataset: Dataset_5971.csv
+  sms_collection: SMSSpamCollection
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+model:
+  n_estimators: 300
+  max_depth: 5
+  learning_rate: 0.04
+  min_child_weight: 3
+  subsample: 0.85
+  colsample_bytree: 0.85
+  reg_alpha: 0.2
+  reg_lambda: 2.0
+  tree_method: hist
