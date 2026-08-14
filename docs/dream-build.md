@@ -141,6 +141,7 @@ Internet
   -> Next.js NEXUS container
        -> MySQL 8
        -> Redis 7
+       -> internal XGBoost model API
        -> n8n automation service
   -> Meta WhatsApp Cloud API
 ```
@@ -157,6 +158,12 @@ Production steps:
 8. Test Meta -> n8n -> NEXUS -> DeepSeek -> WhatsApp end to end.
 9. Confirm the linked sender sees the same conversation in the portal.
 10. Monitor logs, failed jobs, notifications, and audit records.
+
+The model API is an internal FastAPI service. It must be reachable only from
+the NEXUS application network, require `MODEL_API_SECRET` in production, mount
+approved model artifacts read-only, and expose `/healthz` and `/v1/predict`.
+The application must continue to complete deterministic analysis when the model
+service is unavailable.
 
 ## 7. Delivery Phases
 

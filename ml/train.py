@@ -73,6 +73,10 @@ def train(task: str, config_path: Path) -> Path:
         json.dumps({"feature_version": f"{task}-features-1", "columns": list(features.columns), "dtypes": {name: str(value) for name, value in features.dtypes.items()}}, indent=2),
         encoding="utf-8",
     )
+    (output / "feature_defaults.json").write_text(
+        json.dumps({name: float(value) for name, value in features.median(numeric_only=True).items()}, indent=2),
+        encoding="utf-8",
+    )
     (output / "split_manifest.json").write_text(
         json.dumps({"strategy": "grouped_stratified", "groups": "domain-or-normalized-text", "sizes": {name: len(value) for name, value in indices.items()}}, indent=2),
         encoding="utf-8",

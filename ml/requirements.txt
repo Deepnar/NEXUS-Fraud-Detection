@@ -3,3 +3,5 @@ pyyaml>=6.0
 xgboost>=2.1
 scikit-learn>=1.5
 matplotlib>=3.9
+fastapi>=0.115
+uvicorn[standard]>=0.34

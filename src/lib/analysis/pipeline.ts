@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { extractUrls } from "@/lib/url-extraction";
 import { explainWithDeepSeek } from "@/lib/deepseek";
+import { predictWithModel } from "@/lib/model-api";
 import { analyzeMessage } from "./engine";
 import { maybeEscalate } from "./escalation";
 import type { ProviderUrlCheck } from "./types";
@@ -24,6 +25,10 @@ function fallbackSummary(score: number, riskLevel: string, evidence: { descripti
     return `${lead} No strong scam signals were detected, but stay alert for unexpected requests.`;
   }
   return `${lead} Reasons: ${top.join(" ")}`;
+}
+
+function riskRank(level: string): number {
+  return { UNKNOWN: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 }[level] ?? 0;
 }
 
 /**
@@ -94,6 +99,14 @@ export async function runAnalysisPipeline(
       providerChecks: opts.providerChecks,
     });
 
+    // The model API is optional and non-fatal. Deterministic rules remain the
+    // source of the stored score and can always complete the analysis alone.
+    const model = await predictWithModel({
+      requestId: job.id,
+      text: message.content,
+      urls,
+    });
+
     // Optional AI explanation. Time-boxed and non-fatal: the deterministic
     // result stands on its own when DeepSeek is unavailable or misbehaves.
     const ai = env.DEEPSEEK_API_KEY
@@ -109,6 +122,18 @@ export async function runAnalysisPipeline(
       providerResults.workflow = {
         workflowId: opts.workflowId,
         executionId: opts.executionId,
+      };
+    }
+    if (model) {
+      providerResults.xgboost = {
+        status: "ok",
+        message: model.message,
+        urls: model.urls,
+      };
+    } else if (env.MODEL_API_URL) {
+      providerResults.xgboost = {
+        status: "unavailable",
+        note: "Model API did not return a prediction; deterministic result used.",
       };
     }
     if (ai) {
@@ -142,13 +167,16 @@ export async function runAnalysisPipeline(
           riskLevel: deterministic.riskLevel as AnalysisResult["riskLevel"],
           score: deterministic.score,
           deterministicScore: deterministic.score,
-          confidence: ai?.confidence ?? null,
+          confidence:
+            ai?.confidence ??
+            (model?.message?.calibrated ? model.message.probability : null),
           summary,
           evidence: deterministic.evidence as unknown as Prisma.InputJsonValue,
           safeNextSteps: deterministic.safeNextSteps as unknown as Prisma.InputJsonValue,
           limitations: (ai?.limitations ?? []) as unknown as Prisma.InputJsonValue,
           providerResults: providerResults as unknown as Prisma.InputJsonValue,
-          modelVersion: ai?.modelVersion ?? deterministic.modelVersion,
+          modelVersion:
+            ai?.modelVersion ?? model?.message?.modelVersion ?? deterministic.modelVersion,
           ruleVersion: deterministic.ruleVersion,
           completedAt: new Date(),
           indicators: {
@@ -192,7 +220,9 @@ export async function runAnalysisPipeline(
           : undefined,
       autoReason: ai?.disagreement
         ? `Model-rule disagreement: DeepSeek suggested ${ai.proposedRiskLevel} (${ai.proposedScore}/100) while the rule engine scored ${deterministic.score}/100 (${deterministic.riskLevel}).`
-        : undefined,
+        : model?.message && riskRank(model.message.riskLevel) >= 3 && riskRank(model.message.riskLevel) > riskRank(deterministic.riskLevel)
+          ? `XGBoost disagreement: model predicted ${model.message.riskLevel} (${Math.round(model.message.probability * 100)}%) while deterministic rules scored ${deterministic.score}/100 (${deterministic.riskLevel}).`
+          : undefined,
     });
 
     return result;

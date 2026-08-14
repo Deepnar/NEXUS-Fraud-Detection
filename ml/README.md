@@ -33,6 +33,21 @@ Artifacts are written to `ml/artifacts/<task>/<version>/` and include the XGBoos
 
 The current Prisma schema has no training-table contract. NEXUS officer outcomes should be exported into the canonical schema described in `docs/model_training.md` after privacy review, then added as a versioned data source.
 
+## Model API
+
+Run the internal API after artifacts exist:
+
+```powershell
+$env:MODEL_API_SECRET="replace-with-a-long-random-secret"
+python -m uvicorn service:app --app-dir ml --host 127.0.0.1 --port 8001
+```
+
+`POST /v1/predict` accepts message text and returns the message-model
+probability. URL predictions are intentionally returned only when the caller
+supplies the complete page-level feature payload expected by the URL artifact;
+a raw URL alone is not enough for a trustworthy prediction. `GET /healthz`
+reports whether message and URL artifacts are mounted.
+
 ## Limitations
 
 The first pipeline uses engineered numeric features and does not claim production accuracy. It must be evaluated on time/domain/campaign-separated data, calibrated, compared with the deterministic NEXUS rules, and shadow-deployed before it changes user-facing decisions.

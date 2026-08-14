@@ -87,6 +87,27 @@ WHATSAPP_INGEST_SECRET        # shared secret for POST /api/n8n/*
 Optional: `DEEPSEEK_API_KEY` (lets the pipeline explain results directly),
 `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL`, `REDIS_URL`.
 
+### XGBoost model API
+
+The website can call the internal FastAPI model service when `MODEL_API_URL` is
+configured. The service loads approved artifacts from `ml/artifacts` and exposes
+`POST /v1/predict`. NEXUS stores the response under `providerResults.xgboost`
+while keeping deterministic rules authoritative for the final score. If the
+service is unavailable, analysis completes with deterministic evidence and marks
+the model prediction unavailable.
+
+For local model API setup, install `ml/requirements.txt`, train the message and
+URL artifacts, then run:
+
+```powershell
+$env:MODEL_API_SECRET="replace-with-a-long-random-secret"
+python -m uvicorn ml.service:app --host 127.0.0.1 --port 8001
+```
+
+Set `MODEL_API_URL=http://localhost:8001` and the same secret in the NEXUS
+`.env`. The Docker Compose stack builds the model API automatically and mounts
+`ml/artifacts` read-only.
+
 ### Seeding an officer account
 
 Officers are provisioned, not self-registered:

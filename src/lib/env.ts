@@ -27,6 +27,10 @@ const envSchema = z.object({
   DEEPSEEK_MODEL: z.string().default("deepseek-chat"),
   /** Optional Redis URL for distributed rate limits and job locks. */
   REDIS_URL: z.string().optional(),
+  /** Optional internal FastAPI XGBoost prediction service. */
+  MODEL_API_URL: z.string().url().optional(),
+  MODEL_API_SECRET: z.string().min(16).optional(),
+  MODEL_API_TIMEOUT_MS: z.coerce.number().int().positive().max(10000).default(1500),
 });
 
 export const env = envSchema.parse({
@@ -44,4 +48,7 @@ export const env = envSchema.parse({
   DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL,
   DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL,
   REDIS_URL: process.env.REDIS_URL,
+  MODEL_API_URL: process.env.MODEL_API_URL,
+  MODEL_API_SECRET: process.env.MODEL_API_SECRET,
+  MODEL_API_TIMEOUT_MS: process.env.MODEL_API_TIMEOUT_MS,
 });
