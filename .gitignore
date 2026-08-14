@@ -6,3 +6,16 @@ coverage/
 dist/
 *.log
 tsconfig.tsbuildinfo
+
+# Local training datasets and downloaded threat-intelligence feeds
+/*.csv
+/*.tsv
+/*.parquet
+/*.xlsx
+/*.xls
+/*.zip
+/*.gz
+/SMSSpamCollection
+/readme
+/data/
+/datasets/
