@@ -17,11 +17,13 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
-  /** Shared secret protecting the n8n automation ingest endpoints. */
-  WHATSAPP_INGEST_SECRET: z.string().optional(),
-  /** Optional DeepSeek API key. When set, the analysis pipeline can ask
-   *  DeepSeek to explain deterministic results. n8n may own this key
-   *  instead; NEXUS never requires it. */
+  /** AI explanation provider (OpenAI-compatible chat/completions).
+   *  Admin can override at runtime via SystemSetting; env is the default. */
+  AI_PROVIDER: z.string().default("deepseek"),
+  AI_API_KEY: z.string().optional(),
+  AI_BASE_URL: z.string().url().optional(),
+  AI_MODEL: z.string().default("deepseek-chat"),
+  /** Legacy DeepSeek names (fallback if AI_* unset). */
   DEEPSEEK_API_KEY: z.string().optional(),
   DEEPSEEK_BASE_URL: z.string().url().optional(),
   DEEPSEEK_MODEL: z.string().default("deepseek-chat"),
@@ -43,7 +45,10 @@ export const env = envSchema.parse({
   SMTP_USER: process.env.SMTP_USER,
   SMTP_PASS: process.env.SMTP_PASS,
   SMTP_FROM: process.env.SMTP_FROM,
-  WHATSAPP_INGEST_SECRET: process.env.WHATSAPP_INGEST_SECRET,
+  AI_PROVIDER: process.env.AI_PROVIDER,
+  AI_API_KEY: process.env.AI_API_KEY,
+  AI_BASE_URL: process.env.AI_BASE_URL,
+  AI_MODEL: process.env.AI_MODEL,
   DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
   DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL,
   DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL,

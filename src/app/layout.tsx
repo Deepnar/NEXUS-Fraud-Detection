@@ -21,7 +21,8 @@ export default function RootLayout({
           </Link>
           <nav>
             <Link href="/dashboard">Dashboard</Link>
-            <Link href="/conversations/new">New Analysis</Link>
+            <Link href="/conversations/new">Check Message</Link>
+            <Link href="/transactions/new">Check Transaction</Link>
           </nav>
         </header>
         {children}

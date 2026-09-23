@@ -21,6 +21,12 @@ MESSAGE_FEATURE_NAMES = [
     "secrecy_terms",
     "reward_terms",
     "attachment_terms",
+    # Direction features: term counts cannot tell "share your OTP"
+    # (attacker asking -> phish) from "your OTP is 482913" (your own
+    # notification -> benign). These separate the two directions.
+    "share_request_terms",
+    "code_receipt_terms",
+    "no_share_advice_terms",
 ]
 
 TERM_GROUPS = {
@@ -31,6 +37,9 @@ TERM_GROUPS = {
     "secrecy_terms": r"secret|do not tell|don't tell|confidential|keep this",
     "reward_terms": r"won|winner|prize|reward|lottery|gift|cashback|free",
     "attachment_terms": r"apk|exe|zip|attachment|install|download|document",
+    "share_request_terms": r"share (your|the|this|my|an?)?\s*(otp|password|pin|cvv|code|card|details|number)|send (me|us)?\s*(your|the)?\s*(otp|password|pin|cvv|code)|tell me your|provide your|need your otp|require your otp",
+    "code_receipt_terms": r"(your|the) (otp|code|password) is \d|otp.{0,25}\d{4,8}|verification code.{0,25}\d{4,8}|code is \d{4,8}",
+    "no_share_advice_terms": r"do not share|don't share|never share|never ask|will never ask|beware|stay alert|report.*fraud",
 }
 
 URL_RE = re.compile(r"https?://[^\s<>'\"]+", re.IGNORECASE)
@@ -65,6 +74,71 @@ def message_feature_frame(texts: pd.Series) -> pd.DataFrame:
 
 def _as_number(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce")
+
+
+URL_LEXICAL_FEATURE_NAMES = [
+    "lex_url_length",
+    "lex_host_length",
+    "lex_path_ratio",
+    "lex_query_ratio",
+    "lex_has_ip_host",
+    "lex_has_punycode",
+    "lex_dot_density",
+    "lex_hyphen_density",
+    "lex_digit_density_host",
+    "lex_at_count",
+    "lex_percent_count",
+    "lex_has_https",
+    "lex_subdomain_count",
+    "lex_uses_shortener",
+    "lex_has_query",
+]
+
+_SHORTENER_RE = re.compile(
+    r"(bit\.ly|tinyurl|t\.co|goo\.gl|ow\.ly|is\.gd|buff\.ly|adf\.ly|bitly)",
+    re.IGNORECASE,
+)
+
+
+def url_lexical_frame(urls: pd.Series) -> pd.DataFrame:
+    """Raw-URL-only features: computable at inference from the URL string alone.
+
+    This is what the served `url` head is trained on. Page-level PhiUSIIL
+    numerics (URLSimilarityIndex, etc.) are training-time enrichment only and
+    can never be supplied for an arbitrary pasted link.
+    """
+    cleaned = urls.fillna("").astype(str)
+    parsed = cleaned.map(urlparse)
+    hosts = parsed.map(lambda item: item.hostname or "").astype(str)
+    paths = parsed.map(lambda item: item.path or "").astype(str)
+    queries = parsed.map(lambda item: item.query or "").astype(str)
+    url_len = cleaned.map(len).astype(float).replace(0, 1.0)
+    host_len = hosts.map(len).astype(float).replace(0, 1.0)
+    frame = pd.DataFrame({
+        "lex_url_length": cleaned.map(len).astype(float),
+        "lex_host_length": hosts.map(len).astype(float),
+        # Ratios, not raw lengths: raw path/query length is a dataset
+        # artifact (PhiUSIIL benign rows never have paths). Ratios keep
+        # shape signal without "any path = phish".
+        "lex_path_ratio": paths.map(len).astype(float) / url_len,
+        "lex_query_ratio": queries.map(len).astype(float) / url_len,
+        "lex_has_ip_host": hosts.map(
+            lambda h: float(bool(re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", h)))
+        ),
+        "lex_has_punycode": hosts.map(lambda h: float("xn--" in h.lower())),
+        "lex_dot_density": cleaned.map(lambda u: float(u.count("."))) / url_len,
+        "lex_hyphen_density": cleaned.map(lambda u: float(u.count("-"))) / host_len,
+        "lex_digit_density_host": hosts.map(lambda h: float(sum(c.isdigit() for c in h))) / host_len,
+        "lex_at_count": cleaned.map(lambda u: float(u.count("@"))),
+        "lex_percent_count": cleaned.map(lambda u: float(u.count("%"))),
+        "lex_has_https": cleaned.map(lambda u: float(u.lower().startswith("https"))),
+        "lex_subdomain_count": hosts.map(
+            lambda h: float(max(0, len([p for p in h.split(".") if p]) - 2))
+        ),
+        "lex_uses_shortener": cleaned.map(lambda u: float(bool(_SHORTENER_RE.search(u)))),
+        "lex_has_query": queries.map(lambda q: float(len(q) > 0)),
+    })
+    return frame[URL_LEXICAL_FEATURE_NAMES].fillna(0.0).astype("float64")
 
 
 def url_feature_frame(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:

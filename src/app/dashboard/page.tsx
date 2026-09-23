@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus, ReceiptText } from "lucide-react";
 import { LogoutButton } from "@/components/LogoutButton";
-import { DashboardContent, DashboardConversation } from "@/components/DashboardContent";
+import { DashboardContent, DashboardConversation, DashboardTransaction } from "@/components/DashboardContent";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -47,17 +47,47 @@ export default async function DashboardPage() {
   const reported = rows.filter((row) => row.reported).length;
   const awaiting = rows.filter((row) => row.analysisStatus === "PENDING").length;
 
+  const checks = await prisma.transactionCheck.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: {
+      incidentReports: { orderBy: { createdAt: "desc" }, take: 1 },
+    },
+  });
+
+  const txnRows: DashboardTransaction[] = checks.map((check) => ({
+    id: check.id,
+    amount: check.amount,
+    currency: check.currency,
+    txnType: check.txnType,
+    payee: check.receiverName ?? check.merchant ?? check.receiverRef,
+    riskLevel: check.riskLevel,
+    score: check.score,
+    status: check.status,
+    updatedAt: check.createdAt.toISOString(),
+    reported: check.incidentReports.length > 0,
+  }));
+
+  const txnHighRisk = txnRows.filter(
+    (row) => row.riskLevel === "HIGH" || row.riskLevel === "CRITICAL"
+  ).length;
+
   return (
     <main className="page">
       <section className="page-head">
         <div>
-          <h1>Conversation Dashboard</h1>
+          <h1>Fraud Dashboard</h1>
           <p>Signed in as {user.email}</p>
         </div>
         <div className="button-row">
           <Link className="button" href="/conversations/new">
             <MessageSquarePlus size={16} aria-hidden="true" />
-            New Analysis
+            Check Message
+          </Link>
+          <Link className="button" href="/transactions/new">
+            <ReceiptText size={16} aria-hidden="true" />
+            Check Transaction
           </Link>
           <LogoutButton />
         </div>
@@ -69,7 +99,11 @@ export default async function DashboardPage() {
           <span className="muted">Total conversations</span>
         </div>
         <div className="panel stat">
-          <strong>{highRisk}</strong>
+          <strong>{txnRows.length}</strong>
+          <span className="muted">Transactions checked</span>
+        </div>
+        <div className="panel stat">
+          <strong>{highRisk + txnHighRisk}</strong>
           <span className="muted">High / critical risk</span>
         </div>
         <div className="panel stat">
@@ -82,7 +116,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <DashboardContent conversations={rows} />
+      <DashboardContent conversations={rows} transactions={txnRows} />
     </main>
   );
 }

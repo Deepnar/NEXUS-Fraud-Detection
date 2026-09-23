@@ -38,6 +38,7 @@ export async function GET(_request: Request, { params }: Params) {
         orderBy: { createdAt: "desc" },
         include: { officer: { select: { id: true, name: true } } },
       },
+      transactionCheck: true,
       assignments: {
         include: { officer: { select: { id: true, name: true, email: true } } },
         take: 1,

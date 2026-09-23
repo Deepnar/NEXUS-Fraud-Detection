@@ -1,6 +1,13 @@
 pandas>=2.2
 pyyaml>=6.0
 xgboost>=2.1
+lightgbm>=4.0
+optuna>=4.0
+shap>=0.46
+imbalanced-learn>=0.14
+joblib>=1.4
+kagglehub>=1.0.2
+pyarrow>=15
 scikit-learn>=1.5
 matplotlib>=3.9
 fastapi>=0.115

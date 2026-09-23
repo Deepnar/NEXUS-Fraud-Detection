@@ -11,7 +11,8 @@ const queueFilters = z.object({
     .enum(["PENDING", "INVESTIGATING", "RESOLVED", "FALSE_POSITIVE", "ALL"])
     .default("PENDING"),
   risk: z.nativeEnum(RiskLevel).optional(),
-  source: z.enum(["WEB", "WHATSAPP"]).optional(),
+  source: z.enum(["WEB"]).optional(),
+  kind: z.enum(["MESSAGE", "TRANSACTION"]).optional(),
   assignee: z
     .enum(["me", "unassigned"])
     .or(z.string().min(1).max(64))
@@ -39,6 +40,11 @@ export async function GET(request: Request) {
   }
   if (parsed.source) {
     where.conversation = { source: parsed.source };
+  }
+  if (parsed.kind === "MESSAGE") {
+    where.conversationId = { not: null };
+  } else if (parsed.kind === "TRANSACTION") {
+    where.transactionCheckId = { not: null };
   }
   if (parsed.assignee) {
     if (parsed.assignee === "me") {
@@ -77,6 +83,21 @@ export async function GET(request: Request) {
               take: 1,
               select: { id: true, riskLevel: true, score: true, status: true },
             },
+          },
+        },
+        transactionCheck: {
+          select: {
+            id: true,
+            amount: true,
+            currency: true,
+            txnType: true,
+            receiverName: true,
+            merchant: true,
+            receiverRef: true,
+            riskLevel: true,
+            score: true,
+            status: true,
+            updatedAt: true,
           },
         },
         user: { select: { id: true, name: true, phone: true } },

@@ -32,28 +32,76 @@ interface OfficerRow {
   role: string;
 }
 
+interface AiSettings {
+  provider: string;
+  baseUrl: string;
+  model: string;
+  apiKeyConfigured: boolean;
+}
+
 export default function AdminPage() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [logs, setLogs] = useState<AuditRow[]>([]);
   const [officers, setOfficers] = useState<OfficerRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [ai, setAi] = useState<AiSettings | null>(null);
+  const [aiForm, setAiForm] = useState({ provider: "deepseek", baseUrl: "", model: "", apiKey: "" });
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/admin/overview").then((response) => response.json()),
       fetch("/api/officer/audit-log?pageSize=40").then((response) => response.json()),
       fetch("/api/officer/officers").then((response) => response.json()),
+      fetch("/api/admin/ai-settings").then((response) => response.json()),
     ])
-      .then(([overview, audit, directory]) => {
+      .then(([overview, audit, directory, aiSettings]) => {
         if (overview.error) throw new Error(overview.error);
         setStats(overview.stats);
         setLogs(audit.logs ?? []);
         setOfficers(directory.officers ?? []);
+        if (!aiSettings.error) {
+          setAi(aiSettings.settings);
+          setAiForm({
+            provider: aiSettings.settings.provider,
+            baseUrl: aiSettings.settings.baseUrl,
+            model: aiSettings.settings.model,
+            apiKey: "",
+          });
+        }
       })
       .catch((requestError) =>
         setError(requestError instanceof Error ? requestError.message : "Could not load admin data")
       );
   }, []);
+
+  async function saveAiSettings(event: React.FormEvent) {
+    event.preventDefault();
+    setAiBusy(true);
+    setAiMessage(null);
+    try {
+      const response = await fetch("/api/admin/ai-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: aiForm.provider,
+          baseUrl: aiForm.baseUrl || undefined,
+          model: aiForm.model || undefined,
+          apiKey: aiForm.apiKey || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not save AI settings");
+      setAi(data.settings);
+      setAiForm((form) => ({ ...form, apiKey: "" }));
+      setAiMessage("AI provider updated. New analyses will use it.");
+    } catch (requestError) {
+      setAiMessage(requestError instanceof Error ? requestError.message : "Could not save AI settings");
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   if (error) {
     return (
@@ -119,6 +167,65 @@ export default function AdminPage() {
             )}
           </ul>
         </div>
+      </section>
+
+      <section className="card" style={{ marginBottom: 24 }}>
+        <h3>AI explanation provider</h3>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Swaps the model that explains analyses (OpenAI-compatible chat API).
+          {ai ? ` Currently ${ai.provider}:${ai.model} — key ${ai.apiKeyConfigured ? "set" : "missing"}.` : ""}
+          {" "}Deterministic scores are never affected.
+        </p>
+        <form onSubmit={saveAiSettings} className="form">
+          <div className="field-row" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div className="field" style={{ flex: "1 1 140px" }}>
+              <label htmlFor="ai-provider">Provider</label>
+              <select
+                id="ai-provider"
+                value={aiForm.provider}
+                onChange={(e) => setAiForm((f) => ({ ...f, provider: e.target.value }))}
+              >
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="custom">Custom endpoint</option>
+              </select>
+            </div>
+            <div className="field" style={{ flex: "2 1 220px" }}>
+              <label htmlFor="ai-base">Base URL</label>
+              <input
+                id="ai-base"
+                value={aiForm.baseUrl}
+                onChange={(e) => setAiForm((f) => ({ ...f, baseUrl: e.target.value }))}
+                placeholder="https://api.deepseek.com"
+              />
+            </div>
+            <div className="field" style={{ flex: "1 1 160px" }}>
+              <label htmlFor="ai-model">Model</label>
+              <input
+                id="ai-model"
+                value={aiForm.model}
+                onChange={(e) => setAiForm((f) => ({ ...f, model: e.target.value }))}
+                placeholder="deepseek-chat"
+              />
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="ai-key">API key (leave blank to keep current)</label>
+            <input
+              id="ai-key"
+              type="password"
+              value={aiForm.apiKey}
+              onChange={(e) => setAiForm((f) => ({ ...f, apiKey: e.target.value }))}
+              placeholder={ai?.apiKeyConfigured ? "•••••• (set)" : "sk-..."}
+              autoComplete="off"
+            />
+          </div>
+          {aiMessage ? <p className="muted" style={{ fontSize: 13 }}>{aiMessage}</p> : null}
+          <button className="button" type="submit" disabled={aiBusy}>
+            {aiBusy ? "Saving…" : "Save AI provider"}
+          </button>
+        </form>
       </section>
 
       <section className="card">

@@ -6,7 +6,13 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from nexus_ml.features import message_features, message_feature_frame, url_feature_frame
+from nexus_ml.features import (
+    URL_LEXICAL_FEATURE_NAMES,
+    message_features,
+    message_feature_frame,
+    url_feature_frame,
+    url_lexical_frame,
+)
 
 
 class FeatureTests(unittest.TestCase):
@@ -21,7 +27,23 @@ class FeatureTests(unittest.TestCase):
 
     def test_message_frame_has_stable_numeric_columns(self):
         frame = message_feature_frame(pd.Series(["hello", "send OTP"]))
-        self.assertEqual(frame.shape, (2, 15))
+        self.assertEqual(frame.shape, (2, 18))
+        self.assertTrue(all(str(dtype) == "float64" for dtype in frame.dtypes))
+
+    def test_direction_features_separate_request_from_receipt(self):
+        ask = message_features("Bank manager here, share your OTP now to stop fraud")
+        got = message_features("Your OTP for login is 482913. Do not share it with anyone.")
+        self.assertGreater(ask["share_request_terms"], 0)
+        self.assertEqual(ask["code_receipt_terms"], 0)
+        self.assertGreater(got["code_receipt_terms"], 0)
+        self.assertGreater(got["no_share_advice_terms"], 0)
+
+    def test_url_lexical_frame_scores_raw_urls(self):
+        frame = url_lexical_frame(pd.Series(["https://bit.ly/test", "http://192.168.1.1/login"]))
+        self.assertEqual(list(frame.columns), URL_LEXICAL_FEATURE_NAMES)
+        self.assertEqual(frame.shape[0], 2)
+        self.assertEqual(frame["lex_uses_shortener"].iloc[0], 1.0)
+        self.assertEqual(frame["lex_has_ip_host"].iloc[1], 1.0)
         self.assertTrue(all(str(dtype) == "float64" for dtype in frame.dtypes))
 
     def test_url_features_ignore_text_columns(self):

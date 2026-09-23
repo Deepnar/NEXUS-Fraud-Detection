@@ -112,11 +112,11 @@ export const authRateLimiter: RateLimiter = new RedisRateLimiter(
   "auth"
 );
 
-/** WhatsApp/automation ingest: 60 requests per minute per IP. */
-export const ingestRateLimiter: RateLimiter = new RedisRateLimiter(
+/** Transaction/batch ingest: 60 requests per minute per IP. */
+export const transactionRateLimiter: RateLimiter = new RedisRateLimiter(
   60 * 1000,
   60,
-  "ingest"
+  "transactions"
 );
 
 /** Analysis creation: 20 per minute per user. */

@@ -9,7 +9,6 @@ datasource db {
 
 enum ConversationSource {
   WEB
-  WHATSAPP
 }
 
 enum ConversationStatus {
@@ -79,6 +78,7 @@ model User {
   updatedAt       DateTime       @updatedAt
   conversations   Conversation[]
   reports         IncidentReport[]
+  transactionChecks TransactionCheck[]
   sessions        UserSession[]
   notifications   Notification[]
 
@@ -236,21 +236,24 @@ model MessageIndicator {
 }
 
 model IncidentReport {
-  id             String         @id @default(cuid())
-  conversationId String
-  userId         String?
-  reason         String         @db.Text
-  status         IncidentStatus @default(PENDING)
-  origin         IncidentOrigin @default(USER)
-  autoReason     String?        @db.Text
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
-  notes          OfficerNote[]
-  assignments    IncidentAssignment[]
+  id                String          @id @default(cuid())
+  conversationId    String?
+  transactionCheckId String?
+  userId            String?
+  reason            String          @db.Text
+  status            IncidentStatus  @default(PENDING)
+  origin            IncidentOrigin  @default(USER)
+  autoReason        String?         @db.Text
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  conversation      Conversation?   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  transactionCheck  TransactionCheck? @relation(fields: [transactionCheckId], references: [id], onDelete: Cascade)
+  user              User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  notes             OfficerNote[]
+  assignments       IncidentAssignment[]
 
   @@index([conversationId])
+  @@index([transactionCheckId])
   @@index([status, createdAt])
 }
 
@@ -361,4 +364,60 @@ model MfaChallenge {
   officer    Officer  @relation(fields: [officerId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+}
+
+enum TransactionType {
+  UPI
+  NEFT
+  IMPS
+  CARD
+  CASH
+  OTHER
+}
+
+model TransactionCheck {
+  id               String          @id @default(cuid())
+  userId           String?
+  amount           Float
+  currency         String          @default("INR")
+  txnType          TransactionType @default(UPI)
+  senderRef        String?
+  receiverRef      String?
+  receiverName     String?
+  merchant         String?
+  description      String?         @db.Text
+  occurredAt       DateTime?
+  status           AnalysisStatus  @default(PENDING)
+  riskLevel        RiskLevel       @default(UNKNOWN)
+  score            Float?
+  deterministicScore Int?
+  confidence       Float?
+  summary          String?         @db.Text
+  evidence         Json?
+  safeNextSteps    Json?
+  limitations      Json?
+  providerResults  Json?
+  modelVersion     String?
+  ruleVersion      String?
+  failureCode      String?
+  idempotencyKey   String          @unique
+  attempts         Int             @default(0)
+  completedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  user             User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  incidentReports  IncidentReport[]
+
+  @@index([userId, createdAt])
+  @@index([riskLevel])
+  @@index([status, createdAt])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
 }
