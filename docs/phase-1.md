@@ -37,8 +37,6 @@ WhatsApp message
 
 ```http
 POST /api/auth/register
-POST /api/auth/register/request-otp
-POST /api/auth/register/verify-otp
 POST /api/auth/login
 POST /api/auth/logout
 GET  /api/auth/me

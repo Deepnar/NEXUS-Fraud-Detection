@@ -10,7 +10,7 @@ authorized officer who investigates it in a dedicated portal.
 ## Feature map
 
 **User platform**
-- Email/password registration with SMTP OTP verification, login, HTTP-only JWT sessions
+- Email/password registration and login with HTTP-only JWT sessions
 - Dashboard with summary strip (total / high-risk / reported / awaiting analysis),
   search, and source/risk filters
 - New-analysis intake with privacy note and processing state
@@ -67,7 +67,7 @@ authorized officer who investigates it in a dedicated portal.
 
 ```bash
 npm install
-cp .env.example .env   # fill DATABASE_URL, AUTH_SECRET, SMTP_*, WHATSAPP_INGEST_SECRET
+cp .env.example .env   # fill DATABASE_URL, AUTH_SECRET
 docker compose up -d mysql
 npx prisma generate
 npx prisma migrate dev
@@ -80,7 +80,6 @@ npm run dev            # http://localhost:3000
 DATABASE_URL
 AUTH_SECRET
 NEXT_PUBLIC_APP_NAME
-SMTP_HOST / SMTP_PORT / SMTP_SECURE / SMTP_USER / SMTP_PASS / SMTP_FROM
 WHATSAPP_INGEST_SECRET        # shared secret for POST /api/n8n/*
 ```
 
@@ -175,8 +174,7 @@ routing to `http://127.0.0.1:3002`.
 
 ## API surface (summary)
 
-- User: `/api/auth/register`, `/api/auth/register/request-otp`,
-  `/api/auth/register/verify-otp`, `/api/auth/login`, `/api/auth/logout`,
+- User: `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`,
   `/api/auth/me`, `/api/conversations`, `/api/conversations/:id`,
   `/api/conversations/:id/messages`, `/api/conversations/:id/report`
 - Analysis: `/api/analysis` (POST), `/api/analysis/:id`, `/api/analysis/:id/retry`

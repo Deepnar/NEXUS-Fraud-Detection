@@ -9,34 +9,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [pendingEmail, setPendingEmail] = useState("");
 
   async function onSubmit(formData: FormData) {
     setError("");
     setLoading(true);
-
-    if (mode === "register" && pendingEmail) {
-      const response = await fetch("/api/auth/register/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: pendingEmail,
-          otp: String(formData.get("otp") ?? ""),
-        }),
-      });
-
-      const data = await response.json();
-      setLoading(false);
-
-      if (!response.ok) {
-        setError(data.error ?? "Verification failed");
-        return;
-      }
-
-      router.push("/dashboard");
-      router.refresh();
-      return;
-    }
 
     const payload =
       mode === "register"
@@ -65,35 +41,13 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       return;
     }
 
-    if (mode === "register") {
-      setPendingEmail(String(formData.get("email") ?? ""));
-      return;
-    }
-
     router.push("/dashboard");
     router.refresh();
   }
 
   return (
     <form action={onSubmit} className="form panel panel-pad">
-      {mode === "register" && pendingEmail ? (
-        <>
-          <p className="muted">
-            Enter the 6-digit verification code sent to {pendingEmail}.
-          </p>
-          <div className="field">
-            <label htmlFor="otp">Verification code</label>
-            <input
-              id="otp"
-              name="otp"
-              inputMode="numeric"
-              pattern="[0-9]{6}"
-              autoComplete="one-time-code"
-              required
-            />
-          </div>
-        </>
-      ) : mode === "register" ? (
+      {mode === "register" ? (
         <>
           <div className="field">
             <label htmlFor="name">Name</label>
@@ -105,34 +59,24 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           </div>
         </>
       ) : null}
-      {mode === "login" || !pendingEmail ? (
-        <>
-          <div className="field">
-            <label htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" autoComplete="email" required />
-          </div>
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete={mode === "register" ? "new-password" : "current-password"}
-              minLength={8}
-              required
-            />
-          </div>
-        </>
-      ) : null}
+      <div className="field">
+        <label htmlFor="email">Email</label>
+        <input id="email" name="email" type="email" autoComplete="email" required />
+      </div>
+      <div className="field">
+        <label htmlFor="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete={mode === "register" ? "new-password" : "current-password"}
+          minLength={8}
+          required
+        />
+      </div>
       {error ? <p className="error">{error}</p> : null}
       <button className="button" type="submit" disabled={loading}>
-        {loading
-          ? "Please wait..."
-          : mode === "register" && pendingEmail
-            ? "Verify And Create Account"
-            : mode === "register"
-              ? "Send Verification Code"
-              : "Log In"}
+        {loading ? "Please wait..." : mode === "register" ? "Create Account" : "Log In"}
       </button>
     </form>
   );

@@ -1,9 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { jsonError, jsonOk, parseJsonError } from "@/lib/api";
+import { createSession, setSessionCookie } from "@/lib/auth";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
-import { createOtp, hashOtp, otpExpiryDate } from "@/lib/otp";
-import { sendRegistrationOtpEmail } from "@/lib/mailer";
 import { authRateLimiter, clientIp, rateLimitKey } from "@/lib/rate-limiter";
 import { hashIp, logAudit } from "@/lib/audit";
 import {
@@ -40,42 +40,31 @@ export async function POST(request: Request) {
       return jsonError("An account already exists with this email or phone", 409);
     }
 
-    const otp = createOtp();
-    await prisma.registrationOtp.upsert({
-      where: { email: body.email },
-      create: {
+    const user = await prisma.user.create({
+      data: {
         name: body.name,
         email: body.email,
         phone: body.phone || null,
         passwordHash: await hashPassword(body.password),
-        otpHash: hashOtp(otp),
-        expiresAt: otpExpiryDate(),
+        emailVerifiedAt: new Date(),
       },
-      update: {
-        name: body.name,
-        phone: body.phone || null,
-        passwordHash: await hashPassword(body.password),
-        otpHash: hashOtp(otp),
-        attempts: 0,
-        expiresAt: otpExpiryDate(),
-      },
+      select: { id: true, name: true, email: true, phone: true },
     });
 
-    await sendRegistrationOtpEmail({
-      to: body.email,
-      name: body.name,
-      otp,
-    });
+    const token = await createSession({ userId: user.id, email: user.email });
+    await setSessionCookie(token);
 
     await logAudit({
-      actorType: "SYSTEM",
-      action: "user.register.otp_sent",
+      actorType: "USER",
+      actorId: user.id,
+      action: "user.register.completed",
       targetType: "user",
-      metadata: { email: body.email },
+      targetId: user.id,
+      metadata: { email: user.email },
       ipHash: hashIp(clientIp(request)),
     });
 
-    return jsonOk({ ok: true, message: "Verification code sent" });
+    return jsonOk({ user }, { status: 201 });
   } catch (error) {
     if (isDatabaseUnavailable(error)) {
       return jsonError(databaseUnavailableMessage(), 503);
@@ -85,8 +74,8 @@ export async function POST(request: Request) {
       return jsonError(databaseSchemaMissingMessage(), 503);
     }
 
-    if (error instanceof Error && error.message.startsWith("SMTP is not configured")) {
-      return jsonError(error.message, 503);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return jsonError("An account already exists with this email or phone", 409);
     }
 
     return jsonError(parseJsonError(error), 400);
