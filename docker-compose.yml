@@ -44,12 +44,12 @@ services:
       model-api:
         condition: service_healthy
     healthcheck:
-      # 401 from the ingest probe means the server is up (secret required).
+      # 200/401 from an authed probe means the server is up.
       test:
         - "CMD"
         - "node"
         - "-e"
-        - "fetch('http://localhost:3002/api/n8n/whatsapp').then(r=>process.exit(r.status===401||r.status===200?0:1)).catch(()=>process.exit(1))"
+        - "fetch('http://localhost:3002/api/auth/me').then(r=>process.exit(r.status===401||r.status===200?0:1)).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 10s
       retries: 5

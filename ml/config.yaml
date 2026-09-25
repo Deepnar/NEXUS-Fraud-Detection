@@ -6,6 +6,8 @@ data:
   benign_domains: top-1m.csv
   message_dataset: Dataset_5971.csv
   sms_collection: SMSSpamCollection
+  transaction_n_sample: 1000000
+  transaction_cache: ml/.txn-cache
 split:
   train: 0.70
   validation: 0.15
@@ -17,6 +19,17 @@ model:
   min_child_weight: 3
   subsample: 0.85
   colsample_bytree: 0.85
+  reg_alpha: 0.2
+  reg_lambda: 2.0
+  tree_method: hist
+transaction_model:
+  # Person2 Tuning4 winner; Optuna may override per run.
+  n_estimators: 200
+  max_depth: 6
+  learning_rate: 0.1
+  min_child_weight: 3
+  subsample: 0.9
+  colsample_bytree: 0.9
   reg_alpha: 0.2
   reg_lambda: 2.0
   tree_method: hist

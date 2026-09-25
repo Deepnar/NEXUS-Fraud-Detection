@@ -40,7 +40,31 @@ interface IncidentView {
     messages: { id: string; sender: string; content: string; createdAt: string }[];
     extractedUrls: { id: string; rawUrl: string; host: string | null }[];
     analysisResults: AnalysisView[];
-  };
+  } | null;
+  transactionCheck: {
+    id: string;
+    amount: number;
+    currency: string;
+    txnType: string;
+    receiverName: string | null;
+    receiverRef: string | null;
+    merchant: string | null;
+    description: string | null;
+    occurredAt: string | null;
+    status: string;
+    riskLevel: string;
+    score: number | null;
+    deterministicScore: number | null;
+    confidence: number | null;
+    summary: string | null;
+    modelVersion: string | null;
+    ruleVersion: string | null;
+    completedAt: string | null;
+    evidence: { type: string; severity: string; description: string }[] | null;
+    safeNextSteps: string[] | null;
+    limitations: string[] | null;
+    providerResults: Record<string, unknown> | null;
+  } | null;
   notes: { id: string; note: string; createdAt: string; officer: { name: string } }[];
   assignments: { officer: { id: string; name: string; email: string } }[];
 }
@@ -163,9 +187,32 @@ export default function IncidentWorkspacePage() {
     return <main className="page muted">Loading case…</main>;
   }
 
-  const analysis = incident.conversation.analysisResults[0];
+  const txn = incident.transactionCheck;
+  const analysis: AnalysisView | null = incident.conversation?.analysisResults[0] ?? (
+    txn
+      ? {
+          id: txn.id,
+          riskLevel: txn.riskLevel,
+          score: txn.score,
+          deterministicScore: txn.deterministicScore,
+          confidence: txn.confidence,
+          summary: txn.summary,
+          modelVersion: txn.modelVersion,
+          ruleVersion: txn.ruleVersion,
+          completedAt: txn.completedAt,
+          evidence: txn.evidence,
+          safeNextSteps: txn.safeNextSteps,
+          limitations: txn.limitations,
+          providerResults: txn.providerResults,
+          indicators: [],
+        }
+      : null
+  );
   const assignee = incident.assignments[0]?.officer;
   const evidence = analysis?.evidence ?? analysis?.indicators ?? [];
+  const title = txn
+    ? `${txn.currency} ${txn.amount.toLocaleString("en-IN")} · ${txn.txnType}`
+    : (incident.conversation?.title ?? incident.id);
 
   return (
     <main className="page">
@@ -175,10 +222,10 @@ export default function IncidentWorkspacePage() {
 
       <section className="panel panel-pad" style={{ marginBottom: 20 }}>
         <div className="status-line">
-          <h1 style={{ margin: 0, fontSize: 22 }}>{incident.conversation.title}</h1>
+          <h1 style={{ margin: 0, fontSize: 22 }}>{title}</h1>
           <RiskChip level={analysis?.riskLevel ?? "UNKNOWN"} />
           <span className="chip">{incident.status}</span>
-          <span className="chip">{incident.conversation.source}</span>
+          <span className="chip">{txn ? "Transaction" : (incident.conversation?.source ?? "—")}</span>
           {assignee && <span className="chip">Assigned: {assignee.name}</span>}
         </div>
         <p className="muted" style={{ marginTop: 10 }}>
@@ -191,6 +238,21 @@ export default function IncidentWorkspacePage() {
 
       <div className="workspace">
         <div className="side-stack">
+          {txn ? (
+            <section className="card">
+              <h3><ClipboardList size={15} style={{ verticalAlign: -2, marginRight: 6 }} aria-hidden="true" /> Transaction</h3>
+              <ul className="url-list">
+                <li><strong>Amount</strong> <span className="muted">{txn.currency} {txn.amount.toLocaleString("en-IN")}</span></li>
+                <li><strong>Type</strong> <span className="muted">{txn.txnType}</span></li>
+                {txn.receiverName && <li><strong>Paid to</strong> <span className="muted">{txn.receiverName}</span></li>}
+                {txn.receiverRef && <li><strong>Payee ref</strong> <span className="muted">{txn.receiverRef}</span></li>}
+                {txn.merchant && <li><strong>Merchant</strong> <span className="muted">{txn.merchant}</span></li>}
+                {txn.occurredAt && <li><strong>When</strong> <span className="muted">{new Date(txn.occurredAt).toLocaleString()}</span></li>}
+                {txn.description && <li><strong>Note</strong> <span className="muted">{txn.description}</span></li>}
+              </ul>
+            </section>
+          ) : null}
+          {incident.conversation ? (
           <section className="card">
             <h3><ClipboardList size={15} style={{ verticalAlign: -2, marginRight: 6 }} aria-hidden="true" /> Conversation</h3>
             <div className="chat">
@@ -205,8 +267,9 @@ export default function IncidentWorkspacePage() {
               ))}
             </div>
           </section>
+          ) : null}
 
-          {incident.conversation.extractedUrls.length > 0 && (
+          {incident.conversation && incident.conversation.extractedUrls.length > 0 && (
             <section className="card">
               <h3>Extracted URLs</h3>
               <ul className="url-list">
@@ -363,8 +426,7 @@ export default function IncidentWorkspacePage() {
               </p>
             ) : (
               <p className="muted">
-                {incident.conversation.externalSenderId ?? "Anonymous"}
-                {incident.conversation.source === "WHATSAPP" ? " (WhatsApp sender, unlinked)" : ""}
+                {incident.conversation?.externalSenderId ?? "Anonymous"}
               </p>
             )}
           </section>

@@ -11,7 +11,12 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from xgboost import XGBClassifier
 
-from nexus_ml.features import message_feature_frame, url_feature_frame
+from nexus_ml.features import (
+    message_feature_frame,
+    url_feature_frame,
+    url_lexical_frame,
+)
+from nexus_ml.transaction_features import transaction_feature_frame
 
 
 ROOT = Path(__file__).resolve().parent
@@ -24,6 +29,7 @@ class PredictRequest(BaseModel):
     text: str = Field(default="", max_length=100_000)
     urls: list[str] = Field(default_factory=list, max_length=20)
     urlFeatures: list[dict[str, float]] | None = None
+    transaction: dict[str, Any] | None = None
 
 
 class FeatureContribution(BaseModel):
@@ -47,6 +53,7 @@ class PredictResponse(BaseModel):
     requestId: str
     message: Prediction | None
     urls: list[Prediction]
+    transaction: Prediction | None = None
 
 
 app = FastAPI(title="NEXUS Model API", version="1.0.0")
@@ -97,6 +104,17 @@ def _predict(task: str, frame: pd.DataFrame) -> Prediction | None:
             frame[column] = defaults.get(column, 0.0)
     frame = frame[columns].fillna(0.0).astype("float64")
     probability = float(model.predict_proba(frame)[0, 1])
+    calibrated = False
+    calibration_path = artifact / "calibration_model.joblib"
+    if calibration_path.exists():
+        try:
+            import joblib as _joblib
+
+            iso = _joblib.load(calibration_path)
+            probability = float(iso.predict([probability])[0])
+            calibrated = True
+        except Exception:
+            pass
     importances = getattr(model, "feature_importances_", [])
     ranked = sorted(zip(columns, frame.iloc[0].tolist(), importances), key=lambda item: item[2], reverse=True)[:8]
     top_features = [
@@ -114,10 +132,47 @@ def _predict(task: str, frame: pd.DataFrame) -> Prediction | None:
         modelVersion=f"xgboost-{task}-{artifact.name}",
         featureVersion=str(manifest["feature_version"]),
         probability=probability,
-        calibrated=False,
+        calibrated=calibrated,
         riskLevel=_risk_level(probability),
         topFeatures=top_features,
     )
+
+
+def _predict_message_tfidf(text: str) -> Prediction | None:
+    """TF-IDF message head (preferred). Falls back to count head if absent."""
+    cands = sorted((ARTIFACT_ROOT / "message-tfidf").glob("*/model.json"))
+    if not cands:
+        return None
+    artifact = cands[-1].parent
+    try:
+        import joblib as _joblib
+
+        from nexus_ml.message_tfidf import transform as _tfidf_transform
+
+        model = XGBClassifier()
+        model.load_model(artifact / "model.json")
+        vecs = _joblib.load(artifact / "vectorizer.joblib")
+        frame = _tfidf_transform(vecs["char"], vecs["word"], pd.Series([text]))
+        probability = float(model.predict_proba(frame)[0, 1])
+        manifest = json.loads((artifact / "feature_manifest.json").read_text(encoding="utf-8"))
+        importances = getattr(model, "feature_importances_", [])
+        top_features = [
+            FeatureContribution(name=f"tfidf-rank-{rank}", value=0.0,
+                                importance=float(imp), direction="unknown")
+            for rank, imp in enumerate(sorted(importances, reverse=True)[:8])
+            if float(imp) > 0
+        ]
+        return Prediction(
+            task="message",
+            modelVersion=f"xgboost-message-tfidf-{artifact.name}",
+            featureVersion=str(manifest.get("feature_version", "message-tfidf-1")),
+            probability=probability,
+            calibrated=False,
+            riskLevel=_risk_level(probability),
+            topFeatures=top_features,
+        )
+    except Exception:
+        return None
 
 
 @app.get("/healthz")
@@ -126,7 +181,9 @@ def healthz() -> dict[str, Any]:
         "ok": True,
         "service": "nexus-model-api",
         "messageModel": _latest_artifact("message") is not None,
+        "messageTfidfModel": bool(sorted((ARTIFACT_ROOT / "message-tfidf").glob("*/model.json"))),
         "urlModel": _latest_artifact("url") is not None,
+        "transactionModel": _latest_artifact("transaction") is not None,
     }
 
 
@@ -135,24 +192,26 @@ def predict(payload: PredictRequest, x_model_api_key: str | None = Header(defaul
     _check_secret(x_model_api_key)
     message = None
     if payload.text.strip():
-        message = _predict("message", message_feature_frame(pd.Series([payload.text])))
+        message = _predict_message_tfidf(payload.text)
+        if message is None:
+            message = _predict("message", message_feature_frame(pd.Series([payload.text])))
 
     url_predictions: list[Prediction] = []
-    for index, url in enumerate(payload.urls):
-        # The trained URL benchmark includes page-level features. Do not make
-        # a production URL claim from a raw URL with those fields missing.
-        supplied_features = payload.urlFeatures[index] if payload.urlFeatures and index < len(payload.urlFeatures) else None
-        url_artifact = _load_model("url")
-        required_url_features = {
-            name
-            for name in (url_artifact[1]["columns"] if url_artifact else [])
-            if not name.startswith("derived_")
-        }
-        if supplied_features is None or not required_url_features.issubset(supplied_features):
-            continue
-        frame, _ = url_feature_frame(pd.DataFrame({"URL": [url], **{key: [value] for key, value in supplied_features.items()}}))
-        prediction = _predict("url", frame)
+    for url in payload.urls:
+        # Lexical head scores raw URLs directly; urlFeatures enrichment is
+        # reserved for a future page-level head and is not required.
+        prediction = _predict("url", url_lexical_frame(pd.Series([url])))
         if prediction is not None:
             url_predictions.append(prediction)
 
-    return PredictResponse(requestId=payload.requestId, message=message, urls=url_predictions)
+    transaction_prediction = None
+    if payload.transaction:
+        txn_frame = transaction_feature_frame(pd.DataFrame([payload.transaction]))
+        transaction_prediction = _predict("transaction", txn_frame)
+
+    return PredictResponse(
+        requestId=payload.requestId,
+        message=message,
+        urls=url_predictions,
+        transaction=transaction_prediction,
+    )

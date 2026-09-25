@@ -6,10 +6,13 @@ import { prisma } from "@/lib/prisma";
  *
  * Creates an IncidentReport (origin AUTO) when a case needs officer
  * attention: HIGH/CRITICAL risk, or an explicit reason (e.g. model-rule
- * disagreement). Never duplicates an open report for the same conversation.
+ * disagreement). Never duplicates an open report for the same
+ * conversation or transaction check. Exactly one of conversationId /
+ * transactionCheckId must be set.
  */
 export async function maybeEscalate(params: {
-  conversationId: string;
+  conversationId?: string | null;
+  transactionCheckId?: string | null;
   userId?: string | null;
   riskLevel?: string;
   reason?: string;
@@ -24,9 +27,14 @@ export async function maybeEscalate(params: {
     return null;
   }
 
+  if (!params.conversationId && !params.transactionCheckId) {
+    throw new Error("maybeEscalate requires a conversationId or transactionCheckId");
+  }
+
   const existing = await prisma.incidentReport.findFirst({
     where: {
-      conversationId: params.conversationId,
+      conversationId: params.conversationId ?? undefined,
+      transactionCheckId: params.transactionCheckId ?? undefined,
       status: { in: [IncidentStatus.PENDING, IncidentStatus.INVESTIGATING] },
     },
     select: { id: true },
@@ -38,7 +46,8 @@ export async function maybeEscalate(params: {
 
   return prisma.incidentReport.create({
     data: {
-      conversationId: params.conversationId,
+      conversationId: params.conversationId ?? null,
+      transactionCheckId: params.transactionCheckId ?? null,
       userId: params.userId ?? null,
       reason:
         params.reason ??

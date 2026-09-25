@@ -1,5 +1,6 @@
 import { AnalysisStatus, AnalysisResult, Prisma } from "@prisma/client";
 import { env } from "@/lib/env";
+import { getAiConfig } from "@/lib/ai-provider";
 import { prisma } from "@/lib/prisma";
 import { extractUrls } from "@/lib/url-extraction";
 import { explainWithDeepSeek } from "@/lib/deepseek";
@@ -108,8 +109,10 @@ export async function runAnalysisPipeline(
     });
 
     // Optional AI explanation. Time-boxed and non-fatal: the deterministic
-    // result stands on its own when DeepSeek is unavailable or misbehaves.
-    const ai = env.DEEPSEEK_API_KEY
+    // result stands on its own when the provider is unavailable or misbehaves.
+    // The provider/model is admin-swappable (SystemSetting) with env default.
+    const aiConfig = await getAiConfig();
+    const ai = aiConfig
       ? await explainWithDeepSeek({
           text: message.content,
           urls,
@@ -147,10 +150,10 @@ export async function runAnalysisPipeline(
         },
         disagreement: ai.disagreement,
       };
-    } else if (env.DEEPSEEK_API_KEY) {
+    } else if (aiConfig) {
       providerResults.deepseek = {
         status: "unavailable",
-        note: "DeepSeek explanation was not produced; deterministic result used.",
+        note: "AI explanation was not produced; deterministic result used.",
       };
     }
 

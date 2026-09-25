@@ -1,13 +1,13 @@
-import { env } from "@/lib/env";
+import { getAiConfig } from "@/lib/ai-provider";
 import type { DeterministicAnalysis, ExtractedUrlLike } from "@/lib/analysis/types";
 
 /**
- * Optional DeepSeek explanation client.
+ * Optional AI explanation client (provider-swappable, OpenAI-compatible).
  *
- * Per product principle 7, DeepSeek explains and recommends but never
+ * Per product principle 7, the AI explains and recommends but never
  * decides: the final score/risk level always comes from the deterministic
- * rule engine. The AI's proposal is returned separately so callers can log
- * it and escalate on material disagreement.
+ * rule engine. Which provider/model serves this is chosen by the admin
+ * (SystemSetting override) with env as the default.
  */
 
 const TIMEOUT_MS = 12_000;
@@ -68,7 +68,8 @@ export async function explainWithDeepSeek(params: {
   urls: ExtractedUrlLike[];
   deterministic: DeterministicAnalysis;
 }): Promise<DeepSeekExplanation | null> {
-  if (!env.DEEPSEEK_API_KEY) {
+  const config = await getAiConfig();
+  if (!config?.apiKey) {
     return null;
   }
 
@@ -76,11 +77,10 @@ export async function explainWithDeepSeek(params: {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const base = env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
-    const endpoint = `${base.replace(/\/$/, "")}/chat/completions`;
+    const endpoint = `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
 
     const payload = {
-      model: env.DEEPSEEK_MODEL,
+      model: config.model,
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
@@ -104,7 +104,7 @@ export async function explainWithDeepSeek(params: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -146,7 +146,7 @@ export async function explainWithDeepSeek(params: {
       proposedScore,
       limitations: Array.isArray(parsed.limitations) ? parsed.limitations : [],
       disagreement,
-      modelVersion: env.DEEPSEEK_MODEL,
+      modelVersion: `${config.provider}:${config.model}`,
     };
   } catch {
     return null;

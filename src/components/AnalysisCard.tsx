@@ -25,7 +25,14 @@ interface AnalysisSummary {
  * score, confidence, evidence with severity, recommended next steps, and
  * limitations — and lets the user re-run the analysis.
  */
-export function AnalysisCard({ analysis }: { analysis: AnalysisSummary }) {
+export function AnalysisCard({
+  analysis,
+  retryUrl,
+}: {
+  analysis: AnalysisSummary;
+  /** Override for non-conversation analyses (e.g. transaction checks). */
+  retryUrl?: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +43,7 @@ export function AnalysisCard({ analysis }: { analysis: AnalysisSummary }) {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(`/api/analysis/${analysis.id}/retry`, {
+      const response = await fetch(retryUrl ?? `/api/analysis/${analysis.id}/retry`, {
         method: "POST",
       });
       const data = await response.json();

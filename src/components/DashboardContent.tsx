@@ -19,11 +19,27 @@ export interface DashboardConversation {
   reported: boolean;
 }
 
+export interface DashboardTransaction {
+  id: string;
+  amount: number;
+  currency: string;
+  txnType: string;
+  payee: string | null;
+  riskLevel: string | null;
+  score: number | null;
+  status: string | null;
+  updatedAt: string;
+  reported: boolean;
+}
+
 export function DashboardContent({
   conversations,
+  transactions = [],
 }: {
   conversations: DashboardConversation[];
+  transactions?: DashboardTransaction[];
 }) {
+  const [tab, setTab] = useState<"messages" | "transactions">("messages");
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("");
   const [risk, setRisk] = useState("");
@@ -54,6 +70,54 @@ export function DashboardContent({
 
   return (
     <>
+      <div className="filter-bar" style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className={`chip${tab === "messages" ? " reported" : ""}`}
+          onClick={() => setTab("messages")}
+        >
+          Messages ({conversations.length})
+        </button>
+        <button
+          type="button"
+          className={`chip${tab === "transactions" ? " reported" : ""}`}
+          onClick={() => setTab("transactions")}
+        >
+          Transactions ({transactions.length})
+        </button>
+      </div>
+
+      {tab === "transactions" ? (
+        <section className="list">
+          {transactions.length === 0 ? (
+            <div className="panel panel-pad">
+              <h2>No transactions checked yet</h2>
+              <p className="muted">
+                Check a suspicious payment from the button above — one form, instant verdict.
+              </p>
+            </div>
+          ) : (
+            transactions
+              .filter((t) => !risk || (t.riskLevel ?? "UNKNOWN") === risk)
+              .map((t) => (
+                <Link className="conversation-row" href={`/transactions/${t.id}`} key={t.id}>
+                  <div>
+                    <h2>{t.currency} {t.amount.toLocaleString("en-IN")} · {t.txnType}</h2>
+                    <p className="muted">{t.payee ?? "Unknown payee"}</p>
+                    <div className="meta" style={{ marginTop: 10 }}>
+                      <RiskChip level={t.riskLevel ?? "UNKNOWN"} />
+                      <span className={`chip ${t.reported ? "reported" : ""}`}>
+                        {t.reported ? "REPORTED" : t.status}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="muted">{new Date(t.updatedAt).toLocaleDateString()}</span>
+                </Link>
+              ))
+          )}
+        </section>
+      ) : (
+      <>
       <div className="filter-bar">
         <Search size={16} aria-hidden="true" style={{ color: "var(--muted)" }} />
         <input
@@ -69,7 +133,6 @@ export function DashboardContent({
         <select id="d-source" value={source} onChange={(event) => setSource(event.target.value)}>
           <option value="">All sources</option>
           <option value="WEB">Web</option>
-          <option value="WHATSAPP">WhatsApp</option>
         </select>
         <label htmlFor="d-risk" className="muted" style={{ fontSize: 13 }}>
           Risk
@@ -104,11 +167,7 @@ export function DashboardContent({
                 <h2>{conversation.title}</h2>
                 <p className="muted">{conversation.latestMessage ?? "No messages stored"}</p>
                 <div className="meta" style={{ marginTop: 10 }}>
-                  {conversation.source === "WHATSAPP" ? (
-                    <span className="chip">WhatsApp</span>
-                  ) : (
-                    <span className="chip">Web</span>
-                  )}
+                  <span className="chip">Web</span>
                   <RiskChip level={conversation.riskLevel ?? "UNKNOWN"} />
                   <span className="chip">{conversation.urlCount} URLs</span>
                   <span className={`chip ${conversation.reported ? "reported" : ""}`}>
@@ -126,6 +185,8 @@ export function DashboardContent({
           ))
         )}
       </section>
+      </>
+      )}
     </>
   );
 }

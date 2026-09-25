@@ -17,7 +17,19 @@ interface QueueItem {
     source: string;
     externalSenderId: string | null;
     analysisResults: { id: string; riskLevel: string; score: number | null; status: string }[];
-  };
+  } | null;
+  transactionCheck: {
+    id: string;
+    amount: number;
+    currency: string;
+    txnType: string;
+    receiverName: string | null;
+    merchant: string | null;
+    receiverRef: string | null;
+    riskLevel: string;
+    score: number | null;
+    status: string;
+  } | null;
   user: { id: string; name: string; phone: string | null } | null;
   assignments: { officer: { id: string; name: string } }[];
   _count: { notes: number };
@@ -25,7 +37,8 @@ interface QueueItem {
 
 const STATUS_OPTIONS = ["PENDING", "INVESTIGATING", "RESOLVED", "FALSE_POSITIVE", "ALL"];
 const RISK_OPTIONS = ["", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
-const SOURCE_OPTIONS = ["", "WEB", "WHATSAPP"];
+const SOURCE_OPTIONS = ["", "WEB"];
+const KIND_OPTIONS = ["", "MESSAGE", "TRANSACTION"];
 const ASSIGNEE_OPTIONS = ["", "me", "unassigned"];
 
 export default function OfficerQueuePage() {
@@ -38,6 +51,7 @@ export default function OfficerQueuePage() {
   const [status, setStatus] = useState("PENDING");
   const [risk, setRisk] = useState("");
   const [source, setSource] = useState("");
+  const [kind, setKind] = useState("");
   const [assignee, setAssignee] = useState("");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -55,6 +69,7 @@ export default function OfficerQueuePage() {
     });
     if (risk) params.set("risk", risk);
     if (source) params.set("source", source);
+    if (kind) params.set("kind", kind);
     if (assignee) params.set("assignee", assignee);
     if (debouncedQuery) params.set("q", debouncedQuery);
 
@@ -64,7 +79,7 @@ export default function OfficerQueuePage() {
       throw new Error(data.error);
     }
     return data as { incidents: QueueItem[]; total: number };
-  }, [status, risk, source, assignee, debouncedQuery]);
+  }, [status, risk, source, kind, assignee, debouncedQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +166,15 @@ export default function OfficerQueuePage() {
           ))}
         </select>
 
+        <label htmlFor="f-kind" className="muted" style={{ fontSize: 13 }}>
+          Kind
+        </label>
+        <select id="f-kind" value={kind} onChange={(event) => setKind(event.target.value)}>
+          {KIND_OPTIONS.map((option) => (
+            <option key={option} value={option}>{option === "" ? "All kinds" : option === "MESSAGE" ? "Messages" : "Transactions"}</option>
+          ))}
+        </select>
+
         <span style={{ flex: 1 }} />
 
         <Search size={16} aria-hidden="true" style={{ color: "var(--muted)" }} />
@@ -190,28 +214,35 @@ export default function OfficerQueuePage() {
             </thead>
             <tbody>
               {items.map((item) => {
-                const analysis = item.conversation.analysisResults[0];
+                const txn = item.transactionCheck;
+                const analysis = item.conversation?.analysisResults[0];
+                const title = txn
+                  ? `${txn.currency} ${txn.amount.toLocaleString("en-IN")} · ${txn.txnType}`
+                  : item.conversation?.title || item.id;
+                const subtitle = txn
+                  ? (txn.receiverName ?? txn.merchant ?? txn.receiverRef ?? "unknown payee")
+                  : (item.user ? item.user.name : item.conversation?.externalSenderId ?? "anonymous");
                 return (
                   <tr key={item.id} onClick={() => router.push(`/officer/incidents/${item.id}`)}>
                     <td className="title-cell">
                       <div>
-                        <strong>{item.conversation.title || item.id}</strong>
+                        <strong>{title}</strong>
                       </div>
                       <div className="muted" style={{ fontSize: 12 }}>
-                        {item.user ? item.user.name : item.conversation.externalSenderId ?? "anonymous"}
+                        {subtitle}
                       </div>
                     </td>
                     <td>
-                      <RiskChip level={analysis?.riskLevel ?? "UNKNOWN"} />
+                      <RiskChip level={txn?.riskLevel ?? analysis?.riskLevel ?? "UNKNOWN"} />
                     </td>
-                    <td>{analysis?.score ?? "—"}</td>
+                    <td>{txn?.score ?? analysis?.score ?? "—"}</td>
                     <td>
                       <span className="chip">{item.status}</span>
                     </td>
                     <td>
                       <span className="chip">{item.origin}</span>
                     </td>
-                    <td>{item.conversation.source}</td>
+                    <td>{txn ? `Transaction` : (item.conversation?.source ?? "—")}</td>
                     <td>{item.assignments[0]?.officer.name ?? "Unassigned"}</td>
                     <td>{item._count.notes}</td>
                     <td className="muted">{new Date(item.createdAt).toLocaleDateString()}</td>
